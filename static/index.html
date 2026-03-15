@@ -84,13 +84,16 @@
           <form id="chatForm" class="stack compact-form">
             <div class="panel-head chat-head">
               <div class="chat-title-line">
-                <h2>CHAT</h2>
-                <div class="chat-mode-switch" role="tablist" aria-label="Chat mode">
-                  <button id="chatModeAiButton" type="button" class="chat-mode-btn is-active" aria-selected="true">AI</button>
-                  <button id="chatModeDmButton" type="button" class="chat-mode-btn" aria-selected="false">Node DM</button>
+                <div class="chat-title-main">
+                  <h2>CHAT</h2>
+                  <div class="chat-mode-switch" role="tablist" aria-label="Chat mode">
+                    <button id="chatModeAiButton" type="button" class="chat-mode-btn is-active" aria-selected="true">AI</button>
+                    <button id="chatModeDmButton" type="button" class="chat-mode-btn" aria-selected="false">Node DM</button>
+                  </div>
                 </div>
               </div>
-              <div>
+              <button id="clearChatButton" type="button" class="panel-action-button chat-clear-button" aria-label="Clear chat">Clear</button>
+              <div class="chat-subtitle-row">
                 <div id="chatSubtitle" class="chat-subtitle">Offline model test</div>
               </div>
             </div>
@@ -746,6 +749,3 @@
   <script src="/static/app.js" defer></script>
 </body>
 </html>
-
-
-

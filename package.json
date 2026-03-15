@@ -4,7 +4,8 @@
   "private": true,
   "description": "Meshtastic DM bot with local web UI",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "postinstall": "node scripts/postinstall.js"
   },
   "dependencies": {
     "@cashu/cashu-ts": "^0.9.0",

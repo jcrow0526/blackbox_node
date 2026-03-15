@@ -57,6 +57,23 @@ The app starts in whatever mode it can. Radio features stay inactive until a dev
 
 ## Installation
 
+### Fast path
+
+The normal install flow is:
+
+```bat
+npm install
+npm start
+```
+
+During `npm install`, the project bootstraps the local AI runtime automatically:
+- installs JavaScript dependencies
+- downloads a Windows `llama.cpp` runtime into `./llama/` if missing
+- downloads a starter GGUF model into `./models/` if missing
+- attempts to install the Meshtastic Python package into `./pydeps/` if Python is available
+
+That is enough for the web UI and local AI to start on a clean machine.
+
 ### 1. Prerequisites
 
 Install these before anything else:
@@ -73,16 +90,18 @@ python --version
 ### 2. Clone and install Node dependencies
 
 ```bat
-git clone https://github.com/your-username/blackbox-node.git
-cd blackbox-node
+git clone https://github.com/wadadawadada/blackbox_node.git
+cd blackbox_node
 npm install
 ```
 
-This creates `node_modules/` with all JavaScript dependencies.
+This creates `node_modules/` and runs the bootstrap installer for the local AI runtime.
 
-### 3. Set up llama.cpp (AI backend)
+### 3. Set up llama.cpp (manual fallback only)
 
-The `llama/` folder must contain `llama-server.exe` and its companion DLLs. Download a prebuilt Windows release from the [llama.cpp releases page](https://github.com/ggerganov/llama.cpp/releases) — look for the `win-cuda`, `win-vulkan`, or `win-cpu` zip for your hardware.
+Skip this step unless automatic bootstrap failed or you want to replace the runtime manually.
+
+Otherwise, the `llama/` folder must contain `llama-server.exe` and its companion DLLs. Download a prebuilt Windows release from the [llama.cpp releases page](https://github.com/ggerganov/llama.cpp/releases) — look for the `win-cuda`, `win-vulkan`, or `win-cpu` zip for your hardware.
 
 Extract these files into `./llama/`:
 ```
@@ -100,9 +119,11 @@ llama/
 > - NVIDIA GPU → `llama-b...-bin-win-cuda-cu12.x-x64.zip`
 > - AMD / Intel GPU → `llama-b...-bin-win-vulkan-x64.zip`
 
-### 4. Download a model
+### 4. Download a model (manual fallback only)
 
-Create the `models/` folder and download at least one `.gguf` model file into it.
+Skip this step unless automatic bootstrap failed or you want to add more models manually.
+
+Otherwise, create the `models/` folder and download at least one `.gguf` model file into it.
 
 **Option A — use the built-in model manager** (easiest):
 1. Run `npm start`
@@ -126,6 +147,7 @@ No device? The app starts fine — radio features just show as disconnected.
 ## Quick start
 
 ```bat
+npm install
 npm start
 ```
 
@@ -133,7 +155,7 @@ On launch:
 - Web UI opens at `http://127.0.0.1:7860`
 - `llama-server.exe` starts from `./llama/` and loads the selected model
 - Python Meshtastic bridge (`bridge.py`) connects to a detected serial device
-- Python dependencies auto-install to `./pydeps/` if missing
+- The installer prepares `./llama/`, `./models/`, and tries to prepare `./pydeps/`
 
 ---
 
@@ -143,8 +165,9 @@ On launch:
 |---|---|
 | Node.js 18+ | Runtime for the web server |
 | Python 3.11+ | Required only for Meshtastic radio features |
-| `./llama/llama-server.exe` | See Installation step 3 |
-| At least one `.gguf` in `./models/` | AI stays offline until a model is present |
+| Internet during `npm install` | Needed to download `llama.cpp`, a starter model, and optional Python deps |
+| `./llama/llama-server.exe` | Auto-downloaded on install if missing |
+| At least one `.gguf` in `./models/` | Auto-downloaded on install if missing |
 | Meshtastic device on USB serial | Optional — radio features only |
 
 ---
@@ -188,6 +211,7 @@ On launch:
 |---|---|
 | Web UI | `http://127.0.0.1:7860` |
 | LLM backend | `http://127.0.0.1:8080` |
+| Starter model installed by bootstrap | `SmolLM2-135M-Instruct-IQ4_XS.gguf` |
 | Default model | `Qwen2.5-3B-Instruct-Q5_K_M.gguf` |
 
 ---
@@ -195,8 +219,9 @@ On launch:
 ## Notes
 
 - The app runs without a radio — Meshtastic features simply show as disconnected.
-- Without a model in `./models/`, the UI starts but AI stays unavailable until a model is added.
-- Downloading models or auto-installing Python packages requires internet at that moment. Runtime is otherwise fully local.
+- If Python is missing, the web UI and local AI still work, but Meshtastic radio features stay unavailable.
+- Automatic bootstrap currently targets Windows for `llama.cpp` runtime download.
+- Downloading models or auto-installing Python packages requires internet during `npm install`. Runtime is otherwise fully local.
 - Cashu token operations require internet access to reach the mint. Tokens already in your wallet can be held and transferred offline.
 
 ---

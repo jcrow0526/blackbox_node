@@ -16,6 +16,7 @@ const chatText = document.getElementById("chatText");
 const chatSubtitle = document.getElementById("chatSubtitle");
 const chatModeAiButton = document.getElementById("chatModeAiButton");
 const chatModeDmButton = document.getElementById("chatModeDmButton");
+const clearChatButton = document.getElementById("clearChatButton");
 const chatPeerRow = document.getElementById("chatPeerRow");
 const chatPeerSelect = document.getElementById("chatPeerSelect");
 const nodeModal = document.getElementById("nodeModal");
@@ -357,6 +358,30 @@ function renderLocalChat(userText, replyText) {
 
 function renderPendingLocalChat(userText) {
   renderLocalChat(userText, "Thinking...");
+}
+
+async function clearActiveChat() {
+  if (chatState.mode === CHAT_MODE_DM) {
+    const peerId = String(chatState.selectedPeer || "").trim();
+    if (!peerId) {
+      renderChatEmpty("Select a node to start DM chat.");
+      return;
+    }
+    await fetchJson("/api/messages/clear", {
+      method: "POST",
+      body: JSON.stringify({ scope: "peer", peerId }),
+    });
+    await loadMessages();
+    return;
+  }
+
+  await fetchJson("/api/messages/clear", {
+    method: "POST",
+    body: JSON.stringify({ scope: "local" }),
+  });
+  chatState.localExchange = null;
+  renderLocalChatFromState();
+  await loadMessages();
 }
 
 function renderLocalChatFromState() {
@@ -1490,6 +1515,19 @@ clearLogButton.addEventListener("click", () => {
   logBox.innerHTML = "";
 });
 
+if (clearChatButton) {
+  clearChatButton.addEventListener("click", async () => {
+    clearChatButton.disabled = true;
+    try {
+      await clearActiveChat();
+    } catch (error) {
+      appendLog({ sender: "system", recipient: "-", text: error.message, transport: "system" });
+    } finally {
+      clearChatButton.disabled = false;
+    }
+  });
+}
+
 chatText.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
@@ -2023,7 +2061,6 @@ loadStatus();
 loadMessages();
 loadNodes();
 connectEvents();
-
 
 
 

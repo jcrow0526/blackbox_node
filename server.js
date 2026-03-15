@@ -638,6 +638,47 @@ function addMessage(entry) {
   broadcast("message", item);
 }
 
+function clearMessages(scope, peerId = "") {
+  const normalizedScope = String(scope || "").trim();
+  const normalizedPeerId = String(peerId || "").trim();
+  const before = messages.length;
+
+  if (normalizedScope === "local") {
+    messages = messages.filter((message) => {
+      const sender = String(message.sender || "");
+      const recipient = String(message.recipient || "");
+      return !(
+        (sender === "local-ui-user" && recipient === "local-ai")
+        || (sender === "local-ai" && recipient === "local-ui-user")
+      );
+    });
+  } else if (normalizedScope === "peer") {
+    if (!normalizedPeerId) {
+      throw new Error("peerId is required");
+    }
+    messages = messages.filter((message) => {
+      const direction = String(message.direction || "");
+      const sender = String(message.sender || "");
+      const recipient = String(message.recipient || "");
+      if (direction === "in") {
+        return !(sender === normalizedPeerId && recipient === "local-ai");
+      }
+      if (direction === "out") {
+        return !(sender === "local-ui" && recipient === normalizedPeerId);
+      }
+      return true;
+    });
+  } else {
+    throw new Error("invalid scope");
+  }
+
+  if (messages.length !== before) {
+    persistMessages();
+  }
+
+  return { ok: true, removed: before - messages.length, remaining: messages.length };
+}
+
 function normalizeWhitespace(text) {
   return String(text || "").replace(/\s+/g, " ").trim();
 }
@@ -2431,6 +2472,16 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, messages);
     }
 
+    if (req.method === "POST" && req.url === "/api/messages/clear") {
+      try {
+        const body = await readJson(req);
+        const result = clearMessages(body.scope, body.peerId);
+        return sendJson(res, 200, result);
+      } catch (error) {
+        return sendJson(res, 400, { error: error.message });
+      }
+    }
+
     if (req.method === "GET" && req.url === "/api/nodes") {
       return sendJson(res, 200, getNodesPayload());
     }
@@ -2741,5 +2792,3 @@ server.listen(PORT, HOST, () => {
   startBridge();
   openBrowser();
 });
-
-
