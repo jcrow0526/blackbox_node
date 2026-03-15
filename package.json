@@ -1,0 +1,17 @@
+{
+  "name": "localist",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Meshtastic DM bot with local web UI",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@cashu/cashu-ts": "^0.9.0",
+    "@noble/hashes": "^1.7.2",
+    "@scure/base": "^1.2.4",
+    "@scure/bip32": "^1.4.0",
+    "@scure/bip39": "^1.4.0",
+    "qrcode": "^1.5.4"
+  }
+}
