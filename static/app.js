@@ -64,15 +64,8 @@ const walletAmountInput = document.getElementById("walletAmountInput");
 const walletUnitSelect = document.getElementById("walletUnitSelect");
 const walletTransportSelect = document.getElementById("walletTransportSelect");
 const walletMemoInput = document.getElementById("walletMemoInput");
-const walletRequestStatus = document.getElementById("walletRequestStatus");
-const walletRequestAmountInput = document.getElementById("walletRequestAmountInput");
-const walletRequestUnitSelect = document.getElementById("walletRequestUnitSelect");
-const walletRequestMemoInput = document.getElementById("walletRequestMemoInput");
-const walletGeneratedRequest = document.getElementById("walletGeneratedRequest");
-const walletCopyGeneratedRequestButton = document.getElementById("walletCopyGeneratedRequestButton");
 const walletReceiveId = document.getElementById("walletReceiveId");
 const walletCopyReceiveIdButton = document.getElementById("walletCopyReceiveIdButton");
-const walletGenerateReceiveIdButton = document.getElementById("walletGenerateReceiveIdButton");
 const walletHistoryBody = document.getElementById("walletHistoryBody");
 const walletHistoryEmpty = document.getElementById("walletHistoryEmpty");
 const walletPreferredUnitSelect = document.getElementById("walletPreferredUnitSelect");
@@ -956,6 +949,7 @@ async function loadWalletState() {
     const data = await fetchJson("/api/wallet");
     walletState.walletConfigured = data.configured;
     walletState.address = data.address || null;
+    walletState.mnemonic = data.mnemonic || null;
     applyWalletConfiguredState();
     if (data.configured) loadWalletBalance();
   } catch { /* keep defaults */ }
@@ -1614,40 +1608,7 @@ if (receiveCashuTab) {
 }
 
 walletCopyReceiveIdButton.addEventListener("click", async () => {
-  try {
-    await copyText(walletReceiveId.value);
-    walletRequestStatus.textContent = "Address copied.";
-  } catch {
-    walletRequestStatus.textContent = "Copy failed.";
-  }
-});
-
-walletGenerateReceiveIdButton.addEventListener("click", () => {
-  const address = walletState.address || "";
-  if (!address) { walletRequestStatus.textContent = "No wallet address."; return; }
-  const amount = walletRequestAmountInput.value.trim();
-  const unit = walletRequestUnitSelect.value;
-  const memo = walletRequestMemoInput.value.trim();
-  const params = new URLSearchParams();
-  if (amount) {
-    const btcAmount = unit === "sats" ? (Number(amount) / 1e8).toFixed(8) : amount;
-    params.set("amount", btcAmount);
-  }
-  if (memo) params.set("label", memo);
-  const uri = `bitcoin:${address}${params.toString() ? "?" + params.toString() : ""}`;
-  walletGeneratedRequest.value = uri;
-  walletRequestStatus.textContent = "URI generated.";
-});
-
-walletCopyGeneratedRequestButton.addEventListener("click", async () => {
-  const value = walletGeneratedRequest.value.trim();
-  if (!value) { walletRequestStatus.textContent = "Generate a URI first."; return; }
-  try {
-    await copyText(value);
-    walletRequestStatus.textContent = "URI copied.";
-  } catch {
-    walletRequestStatus.textContent = "Copy failed.";
-  }
+  await copyText(walletReceiveId.value).catch(() => {});
 });
 
 walletPreferredUnitSelect.addEventListener("change", () => {
@@ -2051,7 +2012,6 @@ renderWalletHistory();
 if (walletPreferredUnitSelect) walletPreferredUnitSelect.value = walletState.settings.preferredUnit;
 if (walletDefaultTransportSelect) walletDefaultTransportSelect.value = walletState.settings.defaultTransport;
 if (walletUnitSelect) walletUnitSelect.value = walletState.settings.preferredUnit;
-if (walletRequestUnitSelect) walletRequestUnitSelect.value = walletState.settings.preferredUnit;
 if (walletTransportSelect) walletTransportSelect.value = walletState.settings.defaultTransport;
 applyWalletConfiguredState();
 setChatMode(CHAT_MODE_AI);

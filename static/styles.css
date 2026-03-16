@@ -1301,9 +1301,14 @@ textarea {
 }
 
 .wallet-panel {
-  width: min(400px, calc(100vw - 24px));
-  height: min(640px, calc(100vh - 60px));
+  width: min(420px, calc(100vw - 24px));
+  height: min(680px, calc(100vh - 40px));
   position: relative;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    var(--panel);
+  background-size: 18px 18px, 18px 18px, auto;
 }
 
 #walletMnemonicBlock:not(.hidden) {
@@ -1322,7 +1327,7 @@ textarea {
 .wallet-modal-body {
   display: grid;
   grid-template-rows: auto auto 1fr;
-  gap: 6px;
+  gap: 10px;
   min-height: 0;
   overflow: hidden;
   padding-right: 0;
@@ -1333,6 +1338,7 @@ textarea {
   display: block;
   overflow-y: auto;
   overflow-x: hidden;
+  padding-top: 6px;
   padding-right: 2px;
   scrollbar-color: #596676 #1a1d21;
   scrollbar-width: auto;
@@ -1354,7 +1360,7 @@ textarea {
 
 .wallet-view-panel {
   display: grid;
-  gap: 8px;
+  gap: 14px;
   min-height: 0;
   align-content: start;
 }
@@ -1399,14 +1405,14 @@ textarea {
 .wallet-overview {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 0;
+  gap: 10px;
   align-items: stretch;
 }
 
 .wallet-balance-card {
   display: grid;
-  gap: 2px;
-  padding: 8px;
+  gap: 6px;
+  padding: 14px 12px;
   background: linear-gradient(180deg, #1d2733 0%, #151d27 100%);
   border-top: 1px solid #68788a;
   border-left: 1px solid #68788a;
@@ -1445,33 +1451,36 @@ textarea {
 .wallet-toolbar {
   position: relative;
   z-index: 3;
-  background: linear-gradient(180deg, rgba(47, 51, 56, 0.96) 0%, rgba(47, 51, 56, 0.88) 100%);
+  background: linear-gradient(180deg, #1e2329 0%, #171b21 100%);
   border-top: 1px solid var(--edge-light);
   border-left: 1px solid var(--edge-light);
   border-right: 1px solid var(--edge-dark);
-  border-bottom: 1px solid var(--edge-dark);
-  padding: 4px;
+  border-bottom: 2px solid #0d1117;
+  padding: 5px;
 }
 
 .wallet-quick-button {
-  display: grid;
-  place-items: center;
-  gap: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   min-width: 0;
-  width: 50px;
-  height: 50px;
-  padding: 0;
+  height: 58px;
+  padding: 0 2px;
   flex: 0 0 auto;
   font-family: "Press Start Local", monospace;
   font-size: 7px;
   text-transform: uppercase;
-  background: #23272d;
-  color: #eef6ff;
+  background: transparent;
+  color: #6a7d91;
+  border-top: 2px solid transparent;
+  transition: color 0.1s, border-color 0.1s;
 }
 
 .wallet-quick-button svg {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.7;
@@ -1479,17 +1488,34 @@ textarea {
   stroke-linejoin: round;
 }
 
+.wallet-quick-button span {
+  font-size: 5.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: inherit;
+}
+
+.wallet-quick-button:hover {
+  color: #a8bccf;
+}
+
+.wallet-quick-button:active {
+  background: rgba(90, 143, 176, 0.15);
+  color: #c8dff0;
+  transform: translateY(1px);
+}
+
 .wallet-quick-button.is-active {
-  background: #3c5367;
-  color: #f3f8ff;
+  background: transparent;
+  color: #c8dff0;
+  border-top-color: #5a8fb0;
 }
 
 .wallet-status-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px;
+  gap: 6px;
   overflow: visible;
-  padding-bottom: 2px;
 }
 
 .wallet-status-badge strong.status-ok {
@@ -1505,8 +1531,8 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 4px 6px;
-  background: #242830;
+  padding: 6px 10px;
+  background: #1a1e24;
   border-top: 1px solid var(--edge-light);
   border-left: 1px solid var(--edge-light);
   border-right: 1px solid var(--edge-dark);
@@ -1540,8 +1566,8 @@ textarea {
 
 .wallet-summary-card {
   display: grid;
-  gap: 8px;
-  padding: 9px;
+  gap: 12px;
+  padding: 14px 12px;
   background: #1f2329;
   border-top: 1px solid var(--edge-light);
   border-left: 1px solid var(--edge-light);
@@ -1883,10 +1909,31 @@ textarea {
   word-break: break-all;
 }
 
+.wallet-mint-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.wallet-mint-dir-link {
+  font-size: 9px;
+  color: #5a8fb0;
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.wallet-mint-dir-link:hover {
+  color: #8abcd4;
+  opacity: 1;
+}
+
 .wallet-fund-card {
   display: grid;
-  gap: 6px;
-  padding: 10px;
+  gap: 8px;
+  padding: 12px;
   background: #1f2329;
   border-top: 1px solid var(--edge-light);
   border-left: 1px solid var(--edge-light);
@@ -1939,6 +1986,7 @@ textarea {
   align-items: center;
   gap: 6px;
   padding: 5px 8px;
+  margin-bottom: 8px;
   background: #1a2633;
   border-top: 1px solid var(--edge-light);
   border-left: 1px solid var(--edge-light);

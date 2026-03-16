@@ -360,12 +360,14 @@
               <path d="M4 10.5L12 4l8 6.5"></path>
               <path d="M6 9.5V20h12V9.5"></path>
             </svg>
+            <span>Home</span>
           </button>
           <button type="button" class="wallet-quick-button" data-wallet-view="send" aria-label="Open send screen" title="Send">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <path d="M21 3L10 14"></path>
               <path d="M21 3l-7 18l-4-7l-7-4z"></path>
             </svg>
+            <span>Send</span>
           </button>
           <button type="button" class="wallet-quick-button" data-wallet-view="receive" aria-label="Open receive screen" title="Receive">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -374,6 +376,7 @@
               <path d="M5 18h14"></path>
               <path d="M8 20h8"></path>
             </svg>
+            <span>Receive</span>
           </button>
           <button type="button" class="wallet-quick-button" data-wallet-view="fund" aria-label="Open fund screen" title="Fund">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -381,18 +384,21 @@
               <path d="M16 12h.01"></path>
               <path d="M3 9h18"></path>
             </svg>
+            <span>Fund</span>
           </button>
           <button type="button" class="wallet-quick-button" data-wallet-view="history" aria-label="Open activity screen" title="Activity">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <path d="M12 7v5l3 3"></path>
               <circle cx="12" cy="12" r="9"></circle>
             </svg>
+            <span>Activity</span>
           </button>
           <button type="button" class="wallet-quick-button" data-wallet-view="settings" aria-label="Open settings screen" title="Settings">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <circle cx="12" cy="12" r="3"></circle>
               <path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1 1 0 0 0-1.1-.2a1 1 0 0 0-.6.9V20a2 2 0 0 1-4 0v-.2a1 1 0 0 0-.6-.9a1 1 0 0 0-1.1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1 1 0 0 0 .2-1.1a1 1 0 0 0-.9-.6H4a2 2 0 0 1 0-4h.2a1 1 0 0 0 .9-.6a1 1 0 0 0-.2-1.1l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1 1 0 0 0 1.1.2h.1a1 1 0 0 0 .6-.9V4a2 2 0 0 1 4 0v.2a1 1 0 0 0 .6.9a1 1 0 0 0 1.1-.2l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1 1 0 0 0-.2 1.1v.1a1 1 0 0 0 .9.6H20a2 2 0 0 1 0 4h-.2a1 1 0 0 0-.9.6z"></path>
             </svg>
+            <span>Settings</span>
           </button>
         </div>
 
@@ -545,35 +551,6 @@
                   </div>
                 </div>
 
-                <div class="wallet-request-form wallet-form-grid" style="margin-top:4px">
-                  <div class="modal-label wallet-field-wide" style="margin-bottom:2px">Payment request URI</div>
-                  <label class="wallet-field" for="walletRequestAmountInput">
-                    <span>Amount</span>
-                    <input id="walletRequestAmountInput" type="number" min="0" step="1" inputmode="decimal" placeholder="1000">
-                  </label>
-                  <label class="wallet-field" for="walletRequestUnitSelect">
-                    <span>Unit</span>
-                    <select id="walletRequestUnitSelect">
-                      <option value="sats">sats</option>
-                      <option value="BTC">BTC</option>
-                    </select>
-                  </label>
-                  <label class="wallet-field wallet-field-wide" for="walletRequestMemoInput">
-                    <span>Memo</span>
-                    <input id="walletRequestMemoInput" type="text" placeholder="optional">
-                  </label>
-                  <div class="wallet-form-actions wallet-field-wide">
-                    <button id="walletGenerateReceiveIdButton" type="button">Generate URI</button>
-                    <div id="walletRequestStatus" class="device-status-text" role="status" aria-live="polite"></div>
-                  </div>
-                </div>
-
-                <div class="modal-section wallet-section">
-                  <div class="wallet-inline-row">
-                    <input id="walletGeneratedRequest" type="text" readonly placeholder="bitcoin:bc1q...?amount=0.0001">
-                    <button id="walletCopyGeneratedRequestButton" type="button">Copy</button>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -601,7 +578,10 @@
             </div>
 
             <div class="wallet-fund-card">
-              <div class="modal-label">1. Set Cashu mint</div>
+              <div class="wallet-mint-label-row">
+                <div class="modal-label">1. Set Cashu mint</div>
+                <a href="https://audit.8333.space/" target="_blank" rel="noopener noreferrer" class="wallet-mint-dir-link">Browse mints ↗</a>
+              </div>
               <div class="wallet-hint" style="margin-bottom:6px">A mint converts Lightning sats into Cashu tokens you can spend off-grid.</div>
               <div class="wallet-inline-row" style="grid-template-columns: minmax(0,1fr) auto">
                 <input id="cashuMintUrlInput" type="text" placeholder="https://mint.minibits.cash/Bitcoin" value="https://mint.minibits.cash/Bitcoin">
@@ -611,7 +591,7 @@
               <div id="cashuMintInfo" class="wallet-mint-info" hidden></div>
             </div>
 
-            <div class="wallet-fund-card" style="margin-top:4px">
+            <div class="wallet-fund-card">
               <div class="modal-label">2. Create Lightning invoice</div>
               <div class="wallet-hint" style="margin-bottom:6px">Pay this invoice with any Lightning wallet to receive Cashu tokens.</div>
               <div class="wallet-inline-row" style="grid-template-columns: 100px minmax(0,1fr) auto">
@@ -641,7 +621,7 @@
               </div>
             </div>
 
-            <div class="wallet-fund-card" style="margin-top:4px">
+            <div class="wallet-fund-card">
               <div class="modal-label">Pending invoices</div>
               <div id="cashuPendingList" class="wallet-pending-list">
                 <div class="wallet-hint">No pending invoices</div>
@@ -726,7 +706,7 @@
                   </button>
                 </div>
                 <div id="walletSeedRevealGrid" class="wallet-mnemonic-grid hidden" style="margin-top:6px"></div>
-                <div id="walletSeedNotAvailable" class="wallet-hint" style="margin-top:4px">Available only in current session. Reload page to hide permanently.</div>
+                <div id="walletSeedNotAvailable" class="wallet-hint" style="margin-top:4px">Seed phrase is loaded from wallet.json on disk.</div>
               </div>
               <div class="wallet-form-actions" style="margin-top:8px">
                 <button id="walletResetButton" type="button" class="wallet-danger-btn">Delete wallet</button>

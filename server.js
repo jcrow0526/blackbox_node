@@ -378,6 +378,7 @@ function getWalletPayload() {
     network: walletData.network,
     type: walletData.type,
     createdAt: walletData.createdAt,
+    mnemonic: walletData.mnemonic || null,
   };
 }
 
