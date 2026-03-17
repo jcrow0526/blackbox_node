@@ -446,17 +446,85 @@ function isPeerDmMessage(message, peerId) {
   return recipient === peerId && sender === "local-ui";
 }
 
+// Parse optional "[250 sats] cashuA..." wrapper, returns { token, sats } or null
+function parseCashuMessage(text) {
+  const t = (text || "").trim();
+  // With amount prefix: [250 sats] cashuA...
+  const prefixed = /^\[(\d+)\s*sats?\]\s*(cashu[AB]\S+)/i.exec(t);
+  if (prefixed) return { token: prefixed[2], sats: Number(prefixed[1]) };
+  // Plain token
+  if (t.startsWith("cashuA") || t.startsWith("cashuB")) return { token: t, sats: null };
+  return null;
+}
+
+// Detect if a string is a Cashu token (with or without amount prefix)
+function isCashuTokenText(text) {
+  return parseCashuMessage(text) !== null;
+}
+
+// Parse [N/T] prefix from a message text. Returns { partNum, total, content } or null.
+function parseMeshPart(text) {
+  const m = /^\[(\d+)\/(\d+)\]\s*/.exec(text || "");
+  if (!m) return null;
+  return { partNum: Number(m[1]), total: Number(m[2]), content: text.slice(m[0].length) };
+}
+
+// Group sequential [N/T] mesh fragments from the same sender into one virtual message
+// if the assembled content is a Cashu token. Returns a new array with merged messages.
+function groupCashuFragments(thread) {
+  const result = [];
+  let i = 0;
+  while (i < thread.length) {
+    const msg = thread[i];
+    const part = parseMeshPart(msg.text);
+
+    // Try to collect a complete multi-part cashu token starting at [1/T]
+    if (part && part.partNum === 1 && part.total > 1) {
+      const parts = [part.content];
+      let valid = true;
+      for (let k = 1; k < part.total; k++) {
+        const next = thread[i + k];
+        if (!next || next.sender !== msg.sender) { valid = false; break; }
+        const np = parseMeshPart(next.text);
+        if (!np || np.partNum !== k + 1 || np.total !== part.total) { valid = false; break; }
+        parts.push(np.content);
+      }
+      if (valid) {
+        const assembled = parts.join("");
+        if (isCashuTokenText(assembled)) {
+          result.push({ ...msg, text: assembled, isCashuToken: true, fragmentCount: part.total });
+          i += part.total;
+          continue;
+        }
+      }
+    }
+
+    // Single-message cashu token (short enough to fit in one packet)
+    if (isCashuTokenText(msg.text)) {
+      result.push({ ...msg, isCashuToken: true, fragmentCount: 1 });
+      i++;
+      continue;
+    }
+
+    result.push(msg);
+    i++;
+  }
+  return result;
+}
+
 function renderDmChat() {
   const peerId = chatState.selectedPeer;
   if (!peerId) {
     renderChatEmpty("Select a node to start DM chat.");
     return;
   }
-  const thread = latestMessages.filter((message) => isPeerDmMessage(message, peerId));
-  if (!thread.length) {
+  const raw = latestMessages.filter((message) => isPeerDmMessage(message, peerId));
+  if (!raw.length) {
     renderChatEmpty("No DM history with this node yet.");
     return;
   }
+
+  const thread = groupCashuFragments(raw);
 
   chatReplyText.innerHTML = "";
   thread.forEach((message) => {
@@ -471,7 +539,56 @@ function renderDmChat() {
 
     const body = document.createElement("div");
     body.className = "chat-bubble-body";
-    body.textContent = message.text || "";
+
+    if (message.isCashuToken) {
+      const parsed = parseCashuMessage(message.text.trim());
+      const token = parsed ? parsed.token : message.text.trim();
+      const sats = parsed ? parsed.sats : null;
+
+      // Amount badge
+      if (sats !== null) {
+        const amountBadge = document.createElement("div");
+        amountBadge.style.cssText = "font-size:1.1em;font-weight:bold;color:#7ecfaa;margin-bottom:6px";
+        amountBadge.textContent = `+${sats} sats`;
+        body.appendChild(amountBadge);
+      }
+
+      const tokenHint = document.createElement("div");
+      tokenHint.style.cssText = "font-size:0.72em;opacity:0.5;margin-bottom:8px";
+      tokenHint.textContent = `Cashu token${message.fragmentCount > 1 ? ` · ${message.fragmentCount} parts` : ""}`;
+      body.appendChild(tokenHint);
+
+      const redeemBtn = document.createElement("button");
+      redeemBtn.textContent = "Redeem";
+      redeemBtn.className = "wallet-action-button";
+      redeemBtn.style.cssText = "padding:7px 22px;font-size:0.88em;";
+      const statusSpan = document.createElement("span");
+      statusSpan.style.cssText = "display:block;font-size:0.8em;margin-top:6px;opacity:0.8";
+
+      redeemBtn.addEventListener("click", async () => {
+        redeemBtn.disabled = true;
+        statusSpan.textContent = "Redeeming...";
+        try {
+          const data = await fetchJson("/api/cashu/receive", {
+            method: "POST",
+            body: JSON.stringify({ token }),
+          });
+          statusSpan.textContent = `+${data.amount} sats added to balance`;
+          redeemBtn.textContent = "Redeemed";
+          if (cashuState) { cashuState.balance = data.balance; applyCashuState(); }
+          bubble.style.opacity = "0.45";
+          bubble.style.pointerEvents = "none";
+          bubble.style.filter = "grayscale(0.4)";
+        } catch (e) {
+          statusSpan.textContent = e.message || "Failed";
+          redeemBtn.disabled = false;
+        }
+      });
+
+      body.append(redeemBtn, statusSpan);
+    } else {
+      body.textContent = message.text || "";
+    }
 
     bubble.append(meta, body);
     chatReplyText.appendChild(bubble);
@@ -1834,14 +1951,14 @@ walletSendForm.addEventListener("submit", async (event) => {
     cashuState.balance = cashuState.balance - amount;
     applyCashuState();
     walletSendStatus.textContent = `Token created: ${amount} sats`;
-    cashuSendTokenOutput.value = data.token;
+    cashuSendTokenOutput.textContent = data.token;
     cashuSendTokenBlock.hidden = false;
     // Send via Meshtastic DM if recipient set
     if (recipient && transport === "Meshtastic DM") {
       try {
         await fetchJson("/api/mesh/send", {
           method: "POST",
-          body: JSON.stringify({ destinationId: recipient, text: data.token }),
+          body: JSON.stringify({ destinationId: recipient, text: `[${amount} sats] ${data.token}` }),
         });
         walletSendStatus.textContent = `Sent ${amount} sats to ${recipient} via mesh`;
       } catch {
@@ -1858,7 +1975,7 @@ walletSendForm.addEventListener("submit", async (event) => {
 });
 
 cashuCopyTokenButton.addEventListener("click", async () => {
-  try { await copyText(cashuSendTokenOutput.value); cashuCopyTokenButton.textContent = "Copied!"; setTimeout(() => { cashuCopyTokenButton.textContent = "Copy"; }, 1200); } catch { /* silent */ }
+  try { await copyText(cashuSendTokenOutput.textContent); cashuCopyTokenButton.textContent = "Copied!"; setTimeout(() => { cashuCopyTokenButton.textContent = "Copy"; }, 1200); } catch { /* silent */ }
 });
 
 cashuMeltForm.addEventListener("submit", async (event) => {

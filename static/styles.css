@@ -2043,32 +2043,55 @@ textarea {
   background: #3a4249;
 }
 
-.wallet-token-result {
-  display: grid;
-  gap: 5px;
-  margin-top: 6px;
-  padding: 8px;
-  background: #1a2330;
-  border-top: 1px solid var(--edge-light);
-  border-left: 1px solid var(--edge-light);
-  border-right: 1px solid var(--edge-dark);
-  border-bottom: 1px solid var(--edge-dark);
+.wallet-token-card {
+  margin-top: 10px;
+  border-radius: 8px;
+  background: #141a22;
+  border: 1px solid rgba(100,160,220,0.15);
+  overflow: hidden;
 }
 
-.wallet-token-textarea {
-  width: 100%;
-  background: #171b20;
-  border-top: 1px solid var(--edge-dark);
-  border-left: 1px solid var(--edge-dark);
-  border-right: 1px solid var(--edge-light);
-  border-bottom: 1px solid var(--edge-light);
-  color: #9fb8cc;
-  font-size: 8px;
-  padding: 5px 6px;
-  resize: vertical;
-  font-family: monospace;
+.wallet-token-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  background: rgba(100,160,220,0.07);
+  border-bottom: 1px solid rgba(100,160,220,0.1);
+}
+
+.wallet-token-card-label {
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.wallet-token-copy-btn {
+  font-size: 10px !important;
+  padding: 3px 10px !important;
+  border-radius: 4px !important;
+  background: rgba(100,160,220,0.15) !important;
+  border: 1px solid rgba(100,160,220,0.25) !important;
+  color: #8ab4cc !important;
+  cursor: pointer;
   line-height: 1.4;
-  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.wallet-token-copy-btn:hover {
+  background: rgba(100,160,220,0.25) !important;
+  color: #c0ddf0 !important;
+}
+
+.wallet-token-code {
+  padding: 10px 12px;
+  font-family: monospace;
+  font-size: 9.5px;
+  color: #7aa8c2;
+  word-break: break-all;
+  line-height: 1.6;
+  user-select: all;
+  letter-spacing: 0.02em;
 }
 
 .wallet-mint-info {

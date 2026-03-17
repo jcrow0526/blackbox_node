@@ -556,12 +556,12 @@
                   <div id="walletSendStatus" class="device-status-text" role="status" aria-live="polite"></div>
                 </div>
               </form>
-              <div id="cashuSendTokenBlock" class="wallet-token-result" hidden>
-                <div class="modal-label">Cashu token (copy &amp; send manually if needed)</div>
-                <div class="wallet-inline-row">
-                  <textarea id="cashuSendTokenOutput" class="wallet-token-textarea" readonly rows="3"></textarea>
-                  <button id="cashuCopyTokenButton" type="button">Copy</button>
+              <div id="cashuSendTokenBlock" class="wallet-token-card" hidden>
+                <div class="wallet-token-card-header">
+                  <span class="wallet-token-card-label">Cashu token</span>
+                  <button id="cashuCopyTokenButton" type="button" class="wallet-token-copy-btn">Copy</button>
                 </div>
+                <div class="wallet-token-code" id="cashuSendTokenOutput"></div>
               </div>
 
               <div class="wallet-section-divider">Pay Lightning invoice</div>
