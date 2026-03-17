@@ -205,7 +205,9 @@ const DEFAULT_AI_SETTINGS = Object.freeze({
   meshMaxTokens: 120,
 });
 const MESH_PACKET_MAX_BYTES = 120;
+const MESH_PACKET_MAX_BYTES_CASHU = 72;
 const MESH_PACKET_BATCH_DELAY_MS = 3200;
+const MESH_PACKET_BATCH_DELAY_MS_CASHU = 6000;
 const MESH_ACK_RETRY_COUNT = 1;
 const MESH_ACK_RETRY_DELAY_MS = 1800;
 const WEATHER_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -550,6 +552,118 @@ async function fetchBtcTransactions(address) {
 async function generateWalletQr(address) {
   const QRCode = require("qrcode");
   return QRCode.toDataURL(`bitcoin:${address}`, { width: 180, margin: 1, color: { dark: "#f2f8ff", light: "#151d27" } });
+}
+
+async function fetchBtcUtxos(address) {
+  const https = require("https");
+  return new Promise((resolve) => {
+    const url = `${getMempoolBase()}/address/${encodeURIComponent(address)}/utxo`;
+    const req = https.get(url, { timeout: 8000 }, (res) => {
+      let body = "";
+      res.on("data", (chunk) => { body += chunk; });
+      res.on("end", () => {
+        try { resolve(JSON.parse(body)); } catch { resolve([]); }
+      });
+    });
+    req.on("error", () => resolve([]));
+    req.on("timeout", () => { req.destroy(); resolve([]); });
+  });
+}
+
+async function fetchFeeEstimate() {
+  const https = require("https");
+  return new Promise((resolve) => {
+    const url = `${getMempoolBase()}/v1/fees/recommended`;
+    const req = https.get(url, { timeout: 8000 }, (res) => {
+      let body = "";
+      res.on("data", (chunk) => { body += chunk; });
+      res.on("end", () => {
+        try { resolve(JSON.parse(body)); } catch { resolve({ fastestFee: 10, halfHourFee: 5, hourFee: 3, minimumFee: 1 }); }
+      });
+    });
+    req.on("error", () => resolve({ fastestFee: 10, halfHourFee: 5, hourFee: 3, minimumFee: 1 }));
+    req.on("timeout", () => { req.destroy(); resolve({ fastestFee: 10, halfHourFee: 5, hourFee: 3, minimumFee: 1 }); });
+  });
+}
+
+function deriveWalletKey() {
+  const { mnemonicToSeedSync } = require("@scure/bip39");
+  const { HDKey } = require("@scure/bip32");
+  const wd = getActiveWalletData();
+  const seed = mnemonicToSeedSync(wd.mnemonic);
+  return HDKey.fromMasterSeed(seed).derive(wd.derivationPath);
+}
+
+async function buildAndBroadcastBtcTx(toAddress, amountSats, feeRateSatPerVb) {
+  const { Transaction, p2wpkh } = require("@scure/btc-signer");
+  const btcNet = isTestMode() ? require("@scure/btc-signer").TEST_NETWORK : undefined;
+  const https = require("https");
+
+  const key = deriveWalletKey();
+  const myAddress = getActiveWalletData().address;
+  const script = p2wpkh(key.publicKey, btcNet).script;
+
+  const utxos = await fetchBtcUtxos(myAddress);
+  const confirmedUtxos = utxos.filter((u) => u.status && u.status.confirmed);
+  if (!confirmedUtxos.length) throw new Error("No confirmed UTXOs — wallet has no spendable funds");
+
+  // vbyte estimates for P2WPKH: overhead=10, input=68, output=31
+  // Select UTXOs greedily
+  const selected = [];
+  let inputTotal = 0n;
+  for (const utxo of confirmedUtxos) {
+    selected.push(utxo);
+    inputTotal += BigInt(utxo.value);
+    const estVbytes = 10 + selected.length * 68 + 31 * 2;
+    const estFee = BigInt(Math.ceil(estVbytes * feeRateSatPerVb));
+    if (inputTotal >= BigInt(amountSats) + estFee) break;
+  }
+
+  const estVbytes = 10 + selected.length * 68 + 31 * 2;
+  const fee = BigInt(Math.ceil(estVbytes * feeRateSatPerVb));
+  const changeAmount = inputTotal - BigInt(amountSats) - fee;
+  if (changeAmount < 0n) throw new Error(`Insufficient funds: need ${amountSats + Number(fee)} sats, have ${Number(inputTotal)}`);
+
+  const tx = new Transaction();
+  for (const utxo of selected) {
+    tx.addInput({
+      txid: utxo.txid,
+      index: utxo.vout,
+      witnessUtxo: { script, amount: BigInt(utxo.value) },
+    });
+  }
+  tx.addOutputAddress(toAddress, BigInt(amountSats), btcNet);
+  if (changeAmount >= 546n) {
+    tx.addOutputAddress(myAddress, changeAmount, btcNet);
+  }
+  tx.sign(key.privateKey);
+  tx.finalize();
+  const rawHex = tx.hex;
+
+  // Broadcast
+  return new Promise((resolve, reject) => {
+    const mempoolBase = getMempoolBase();
+    const url = new URL(`${mempoolBase}/tx`);
+    const options = {
+      hostname: url.hostname,
+      path: url.pathname,
+      method: "POST",
+      headers: { "Content-Type": "text/plain", "Content-Length": Buffer.byteLength(rawHex) },
+      timeout: 15000,
+    };
+    const req = https.request(options, (res) => {
+      let body = "";
+      res.on("data", (d) => { body += d; });
+      res.on("end", () => {
+        if (res.statusCode === 200) { resolve({ txid: body.trim(), fee: Number(fee) }); }
+        else { reject(new Error(`Broadcast failed (${res.statusCode}): ${body.trim().slice(0, 200)}`)); }
+      });
+    });
+    req.on("error", reject);
+    req.on("timeout", () => { req.destroy(); reject(new Error("Broadcast timeout")); });
+    req.write(rawHex);
+    req.end();
+  });
 }
 
 // ─── End Wallet ───────────────────────────────────────────────────────────────
@@ -2103,10 +2217,10 @@ async function generateReply(peerId, prompt) {
   return reply;
 }
 
-function splitMeshText(text, reserveBytes = 0) {
+function splitMeshText(text, reserveBytes = 0, packetMaxBytes = MESH_PACKET_MAX_BYTES) {
   const chunks = [];
   let remaining = String(text || "").replace(/\s+/g, " ").trim();
-  const maxChunkBytes = MESH_PACKET_MAX_BYTES - reserveBytes;
+  const maxChunkBytes = packetMaxBytes - reserveBytes;
 
   if (maxChunkBytes < 24) {
     throw new Error("chunk reserve is too large for mesh packet");
@@ -2151,13 +2265,13 @@ function splitMeshText(text, reserveBytes = 0) {
   return chunks.length ? chunks : ["No response."];
 }
 
-function buildMeshPackets(text) {
+function buildMeshPackets(text, packetMaxBytes = MESH_PACKET_MAX_BYTES) {
   const normalized = String(text || "").replace(/\s+/g, " ").trim();
   if (!normalized) {
     return ["No response."];
   }
 
-  let chunks = splitMeshText(normalized, 0);
+  let chunks = splitMeshText(normalized, 0, packetMaxBytes);
   if (chunks.length <= 1) {
     return chunks;
   }
@@ -2165,7 +2279,7 @@ function buildMeshPackets(text) {
   for (let pass = 0; pass < 6; pass += 1) {
     const total = chunks.length;
     const reserve = Buffer.byteLength(`[${total}/${total}] `, "utf8");
-    const recalculated = splitMeshText(normalized, reserve);
+    const recalculated = splitMeshText(normalized, reserve, packetMaxBytes);
     if (recalculated.length === total) {
       return recalculated.map((chunk, index) => `[${index + 1}/${total}] ${chunk}`);
     }
@@ -2174,6 +2288,14 @@ function buildMeshPackets(text) {
 
   const total = chunks.length;
   return chunks.map((chunk, index) => `[${index + 1}/${total}] ${chunk}`);
+}
+
+function isCashuMeshText(text) {
+  const normalized = String(text || "").trim();
+  if (!normalized) {
+    return false;
+  }
+  return /^(\[\d+\s*sats?\]\s*)?(cashu[AB]\S+)/i.test(normalized);
 }
 
 async function generateMeshReply(peerId, prompt) {
@@ -2213,7 +2335,7 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function enqueueMeshBatch(destinationId, packets, sender = "local-ai") {
+function enqueueMeshBatch(destinationId, packets, sender = "local-ai", batchDelayMs = MESH_PACKET_BATCH_DELAY_MS) {
   const task = async () => {
     for (let index = 0; index < packets.length; index += 1) {
       const messageText = packets[index];
@@ -2236,7 +2358,7 @@ function enqueueMeshBatch(destinationId, packets, sender = "local-ai") {
         transport: "serial",
       });
       if (index < packets.length - 1) {
-        await sleep(MESH_PACKET_BATCH_DELAY_MS);
+        await sleep(batchDelayMs);
       }
     }
   };
@@ -2247,8 +2369,11 @@ function enqueueMeshBatch(destinationId, packets, sender = "local-ai") {
 }
 
 async function sendMeshReply(destinationId, text, sender = "local-ai") {
-  const packets = buildMeshPackets(text);
-  await enqueueMeshBatch(destinationId, packets, sender);
+  const isCashu = isCashuMeshText(text);
+  const packetMaxBytes = isCashu ? MESH_PACKET_MAX_BYTES_CASHU : MESH_PACKET_MAX_BYTES;
+  const batchDelayMs = isCashu ? MESH_PACKET_BATCH_DELAY_MS_CASHU : MESH_PACKET_BATCH_DELAY_MS;
+  const packets = buildMeshPackets(text, packetMaxBytes);
+  await enqueueMeshBatch(destinationId, packets, sender, batchDelayMs);
 }
 
 function sendBridge(command) {
@@ -3050,6 +3175,13 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, getSwapsPayload());
     }
 
+    if (req.method === "POST" && req.url === "/api/swap/clear") {
+      swaps = [];
+      persistSwaps();
+      broadcast("swaps", getSwapsPayload());
+      return sendJson(res, 200, { ok: true });
+    }
+
     if (req.method === "POST" && req.url === "/api/swap/btc-to-cashu") {
       const body = await readJson(req);
       const amount = Number(body.amount);
@@ -3137,6 +3269,113 @@ const server = http.createServer(async (req, res) => {
       if (!activeWallet) return sendJson(res, 404, { error: "No wallet" });
       const qr = await generateWalletQr(activeWallet.address);
       return sendJson(res, 200, { qr });
+    }
+
+    if (req.method === "GET" && req.url === "/api/wallet/fees") {
+      const fees = await fetchFeeEstimate();
+      return sendJson(res, 200, fees);
+    }
+
+    if (req.method === "POST" && req.url === "/api/wallet/send") {
+      const activeWallet = getActiveWalletData();
+      if (!activeWallet) return sendJson(res, 404, { error: "No wallet" });
+      const body = await readJson(req);
+      const toAddress = String(body.toAddress || "").trim();
+      const amountSats = Number(body.amountSats);
+      const feeRate = Math.max(1, Number(body.feeRate) || 5);
+      if (!toAddress) return sendJson(res, 400, { error: "toAddress required" });
+      if (!amountSats || amountSats < 546) return sendJson(res, 400, { error: "Minimum amount is 546 sats" });
+      try {
+        const result = await buildAndBroadcastBtcTx(toAddress, amountSats, feeRate);
+        return sendJson(res, 200, result);
+      } catch (e) {
+        return sendJson(res, 502, { error: e.message });
+      }
+    }
+
+    if (req.method === "POST" && req.url === "/api/wallet/pay-lightning") {
+      const activeWallet = getActiveWalletData();
+      if (!activeWallet) return sendJson(res, 404, { error: "No wallet" });
+      const body = await readJson(req);
+      const invoice = String(body.invoice || "").trim();
+      if (!invoice) return sendJson(res, 400, { error: "invoice required" });
+      const invoiceNet = detectInvoiceNetwork(invoice);
+      const expectedNet = isTestMode() ? "signet" : "mainnet";
+      if (invoiceNet !== "unknown" && invoiceNet !== expectedNet) {
+        return sendJson(res, 400, { error: `Network mismatch: got ${invoiceNet} invoice, expected ${expectedNet}` });
+      }
+      try {
+        // Generate ephemeral refund keypair
+        const crypto = require("crypto");
+        const { secp256k1 } = require("@noble/curves/secp256k1");
+        const refundPriv = crypto.randomBytes(32);
+        const refundPub = secp256k1.getPublicKey(refundPriv, true);
+        const refundPubHex = Buffer.from(refundPub).toString("hex");
+
+        // Create Boltz submarine swap (v2 API: from/to instead of pair)
+        const boltzBase = isTestMode()
+          ? "https://api.testnet.boltz.exchange"
+          : "https://api.boltz.exchange";
+        // v2 API uses { from, to } not { pair }
+        const swapBody = JSON.stringify({ from: "BTC", to: "BTC", invoice, refundPublicKey: refundPubHex });
+        const swapData = await new Promise((resolve, reject) => {
+          const https = require("https");
+          const url = new URL(`${boltzBase}/v2/swap/submarine`);
+          const opts = {
+            hostname: url.hostname, path: url.pathname, method: "POST",
+            headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(swapBody) },
+            timeout: 15000,
+          };
+          const req2 = https.request(opts, (res2) => {
+            let d = "";
+            res2.on("data", (c) => { d += c; });
+            res2.on("end", () => {
+              console.log(`[boltz] submarine swap response (${res2.statusCode}):`, d.slice(0, 500));
+              try {
+                const parsed = JSON.parse(d);
+                if (parsed.error) reject(new Error(`Boltz: ${parsed.error}`));
+                else resolve(parsed);
+              } catch { reject(new Error(`Boltz error: ${d.slice(0, 200)}`)); }
+            });
+          });
+          req2.on("error", reject);
+          req2.on("timeout", () => { req2.destroy(); reject(new Error("Boltz timeout")); });
+          req2.write(swapBody);
+          req2.end();
+        });
+
+        console.log("[boltz] swap data keys:", Object.keys(swapData));
+        const swapAddress = swapData.address || swapData.lockupAddress;
+        // v2 returns lockupAmount; some versions use expectedAmount
+        const expectedAmount = swapData.lockupAmount || swapData.expectedAmount;
+        if (!swapAddress || !expectedAmount) throw new Error(`Invalid Boltz response — got: ${JSON.stringify(swapData).slice(0, 200)}`);
+
+        // Fetch fee for the on-chain tx
+        const fees = await fetchFeeEstimate();
+        const feeRate = fees.halfHourFee || 5;
+
+        // Send BTC to swap address
+        const txResult = await buildAndBroadcastBtcTx(swapAddress, expectedAmount, feeRate);
+
+        // Track as a swap
+        const swap = {
+          id: createSwapId("btc-ln"),
+          type: "btc-ln-swap",
+          status: "payment_pending",
+          statusLabel: "BTC sent to Boltz, waiting for Lightning payment...",
+          amount: expectedAmount,
+          boltzId: swapData.id,
+          txid: txResult.txid,
+          createdAt: new Date().toISOString(),
+        };
+        swaps.push(swap);
+        persistSwaps();
+        broadcast("swaps", getSwapsPayload());
+
+        return sendJson(res, 200, { swapId: swapData.id, txid: txResult.txid, expectedAmount });
+      } catch (e) {
+        return sendJson(res, 502, { error: e.message });
+      }
     }
 
     if (req.method === "GET" && req.url.startsWith("/api/qr")) {
@@ -3248,5 +3487,3 @@ server.listen(PORT, HOST, () => {
   openBrowser();
   startSwapPolling();
 });
-
-

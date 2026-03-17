@@ -19,6 +19,11 @@ const chatModeDmButton = document.getElementById("chatModeDmButton");
 const clearChatButton = document.getElementById("clearChatButton");
 const chatPeerRow = document.getElementById("chatPeerRow");
 const chatPeerSelect = document.getElementById("chatPeerSelect");
+const chatPeerDropdown = document.getElementById("chatPeerDropdown");
+const chatPeerTrigger = document.getElementById("chatPeerTrigger");
+const chatPeerLabel = document.getElementById("chatPeerLabel");
+const chatPeerCashuButton = document.getElementById("chatPeerCashuButton");
+const chatPeerFilterButtons = Array.from(document.querySelectorAll("[data-chat-peer-filter]"));
 const nodeModal = document.getElementById("nodeModal");
 const nodeModalClose = document.getElementById("nodeModalClose");
 const nodeModalSubtitle = document.getElementById("nodeModalSubtitle");
@@ -169,9 +174,26 @@ const swapLnCheckButton = document.getElementById("swapLnCheckButton");
 const swapLnCheckStatus = document.getElementById("swapLnCheckStatus");
 const activeSwapsCard = document.getElementById("activeSwapsCard");
 const activeSwapsList = document.getElementById("activeSwapsList");
+const clearSwapsButton = document.getElementById("clearSwapsButton");
 const settingsMintUrlInput = document.getElementById("settingsMintUrlInput");
 const settingsSetMintButton = document.getElementById("settingsSetMintButton");
 const settingsMintStatus = document.getElementById("settingsMintStatus");
+// Send tab BTC/Cashu switcher
+const sendBtcTab = document.getElementById("sendBtcTab");
+const sendCashuTab = document.getElementById("sendCashuTab");
+const sendBtcPanel = document.getElementById("sendBtcPanel");
+const sendCashuPanel = document.getElementById("sendCashuPanel");
+const sendBtcContent = document.getElementById("sendBtcContent");
+const sendBtcNoWallet = document.getElementById("sendBtcNoWallet");
+const sendBtcBalance = document.getElementById("sendBtcBalance");
+const sendBtcForm = document.getElementById("sendBtcForm");
+const sendBtcAddress = document.getElementById("sendBtcAddress");
+const sendBtcAmount = document.getElementById("sendBtcAmount");
+const sendBtcFeeRate = document.getElementById("sendBtcFeeRate");
+const sendBtcStatus = document.getElementById("sendBtcStatus");
+const sendBtcLnForm = document.getElementById("sendBtcLnForm");
+const sendBtcLnInvoice = document.getElementById("sendBtcLnInvoice");
+const sendBtcLnStatus = document.getElementById("sendBtcLnStatus");
 const walletViewButtons = Array.from(document.querySelectorAll("[data-wallet-view]"));
 const walletQuickButtons = Array.from(document.querySelectorAll(".wallet-quick-button"));
 const walletViewPanels = {
@@ -192,6 +214,7 @@ let showingDonateView = false;
 let latestMeshtasticConnected = false;
 let latestMessages = [];
 let latestNodes = [];
+const unreadPeers = new Set(); // peer IDs with unread incoming messages
 const HELP_MODAL_TITLE_DEFAULT = "About BLACKBOX NODE";
 const HELP_MODAL_TITLE_DONATE = "DONATE";
 const CHAT_MODE_AI = "ai";
@@ -203,6 +226,12 @@ const chatState = {
   mode: CHAT_MODE_AI,
   selectedPeer: readStoredChatPeer(),
   localExchange: null,
+  dmLoadingPeer: "",
+  peerFilters: {
+    unread: false,
+    active: false,
+    online: false,
+  },
 };
 const cashuState = {
   configured: false,
@@ -300,6 +329,9 @@ function setChatPeerSelection(peerId, { syncWallet = true, persist = true } = {}
   if (syncWallet && chatState.selectedPeer) {
     syncWalletRecipientFromChatPeer(chatState.selectedPeer);
   }
+  if (chatPeerCashuButton) {
+    chatPeerCashuButton.disabled = !chatState.selectedPeer;
+  }
 }
 
 function getNodeAddress(node) {
@@ -325,6 +357,36 @@ function getSelectableNodes() {
     map.set(address, node);
   });
   return Array.from(map.values());
+}
+
+function peerHasDmHistory(peerId) {
+  return latestMessages.some((message) => isPeerDmMessage(message, peerId));
+}
+
+function passesChatPeerFilters(node) {
+  const peerId = getNodeAddress(node);
+  if (!peerId) {
+    return false;
+  }
+  if (chatState.peerFilters.unread && !unreadPeers.has(peerId)) {
+    return false;
+  }
+  if (chatState.peerFilters.active && !peerHasDmHistory(peerId)) {
+    return false;
+  }
+  if (chatState.peerFilters.online && !node.online) {
+    return false;
+  }
+  return true;
+}
+
+function renderChatPeerFilters() {
+  chatPeerFilterButtons.forEach((button) => {
+    const filterName = button.dataset.chatPeerFilter;
+    const enabled = Boolean(chatState.peerFilters[filterName]);
+    button.classList.toggle("is-active", enabled);
+    button.setAttribute("aria-pressed", enabled ? "true" : "false");
+  });
 }
 
 function populateNodeSelect(selectEl, preferredValue = "") {
@@ -355,6 +417,69 @@ function syncNodeSelectors() {
   } else if (chatPeerSelect) {
     setChatPeerSelection(chatPeerSelect.value, { syncWallet: true, persist: true });
   }
+  renderChatPeerList();
+}
+
+function renderChatPeerList() {
+  const listEl = document.getElementById("chatPeerList");
+  if (!listEl) return;
+  const nodes = getSelectableNodes();
+  if (!nodes.length) {
+    listEl.innerHTML = '<div class="chat-peer-empty">No nodes found</div>';
+    return;
+  }
+  const filteredNodes = nodes.filter(passesChatPeerFilters);
+  if (!filteredNodes.length) {
+    listEl.innerHTML = '<div class="chat-peer-empty">No nodes match filters</div>';
+    const activeNode = nodes.find((node) => getNodeAddress(node) === chatState.selectedPeer);
+    if (chatPeerLabel) {
+      chatPeerLabel.textContent = activeNode ? getNodeDisplayLabel(activeNode) : "Select node";
+    }
+    return;
+  }
+  // Sort: unread peers first, then alphabetically
+  const sorted = [...filteredNodes].sort((a, b) => {
+    const aAddr = getNodeAddress(a);
+    const bAddr = getNodeAddress(b);
+    const aUnread = unreadPeers.has(aAddr) ? 0 : 1;
+    const bUnread = unreadPeers.has(bAddr) ? 0 : 1;
+    if (aUnread !== bUnread) return aUnread - bUnread;
+    return getNodeDisplayLabel(a).localeCompare(getNodeDisplayLabel(b));
+  });
+  listEl.innerHTML = "";
+  sorted.forEach((node) => {
+    const addr = getNodeAddress(node);
+    const label = getNodeDisplayLabel(node);
+    const isActive = addr === chatState.selectedPeer;
+    const hasUnread = unreadPeers.has(addr);
+    const item = document.createElement("div");
+    item.className = "chat-peer-item" + (isActive ? " is-active" : "");
+    item.dataset.peer = addr;
+    item.innerHTML = `<span class="chat-peer-item-name">${label}</span>` +
+      (hasUnread ? `<span class="chat-peer-unread" title="Unread messages"><svg width="14" height="11" viewBox="0 0 14 11" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="0.5" y="0.5" width="13" height="10" rx="1" stroke="currentColor"/><path d="M1 1l6 5 6-5" stroke="currentColor" stroke-linecap="round"/></svg></span>` : "");
+    item.addEventListener("click", () => {
+      unreadPeers.delete(addr);
+      updateDmTabUnreadGlow();
+      setChatPeerSelection(addr, { syncWallet: true, persist: true });
+      listEl.hidden = true;
+      renderChatPeerList();
+      if (chatState.mode === CHAT_MODE_DM) {
+        refreshActiveDmChat();
+      }
+    });
+    listEl.appendChild(item);
+  });
+  // Update trigger label
+  const activeNode = nodes.find((node) => getNodeAddress(node) === chatState.selectedPeer);
+  if (chatPeerLabel) {
+    chatPeerLabel.textContent = activeNode ? getNodeDisplayLabel(activeNode) : "Select node";
+  }
+}
+
+function updateDmTabUnreadGlow() {
+  if (!chatModeDmButton) return;
+  const hasAny = unreadPeers.size > 0 && chatState.mode !== CHAT_MODE_DM;
+  chatModeDmButton.classList.toggle("has-unread", hasAny);
 }
 
 function renderChatEmpty(message) {
@@ -363,6 +488,14 @@ function renderChatEmpty(message) {
   empty.className = "chat-empty";
   empty.textContent = message;
   chatReplyText.appendChild(empty);
+}
+
+function renderChatLoading(message = "Loading DM history...") {
+  chatReplyText.innerHTML = "";
+  const loading = document.createElement("div");
+  loading.className = "chat-loading";
+  loading.textContent = message;
+  chatReplyText.appendChild(loading);
 }
 
 function formatChatTime(value) {
@@ -518,6 +651,10 @@ function renderDmChat() {
     renderChatEmpty("Select a node to start DM chat.");
     return;
   }
+  if (chatState.dmLoadingPeer === peerId) {
+    renderChatLoading();
+    return;
+  }
   const raw = latestMessages.filter((message) => isPeerDmMessage(message, peerId));
   if (!raw.length) {
     renderChatEmpty("No DM history with this node yet.");
@@ -596,6 +733,26 @@ function renderDmChat() {
   chatReplyText.scrollTop = chatReplyText.scrollHeight;
 }
 
+async function refreshActiveDmChat() {
+  const peerId = String(chatState.selectedPeer || "").trim();
+  if (!peerId) {
+    renderDmChat();
+    return;
+  }
+  chatState.dmLoadingPeer = peerId;
+  renderDmChat();
+  try {
+    await loadMessages();
+  } finally {
+    if (chatState.dmLoadingPeer === peerId) {
+      chatState.dmLoadingPeer = "";
+    }
+    if (chatState.mode === CHAT_MODE_DM && chatState.selectedPeer === peerId) {
+      renderDmChat();
+    }
+  }
+}
+
 function setChatMode(mode, { focusInput = false } = {}) {
   chatState.mode = mode === CHAT_MODE_DM ? CHAT_MODE_DM : CHAT_MODE_AI;
   const isDm = chatState.mode === CHAT_MODE_DM;
@@ -613,6 +770,9 @@ function setChatMode(mode, { focusInput = false } = {}) {
   }
   if (chatPeerRow) {
     chatPeerRow.classList.toggle("hidden", !isDm);
+  }
+  if (chatPeerCashuButton) {
+    chatPeerCashuButton.classList.toggle("hidden", !isDm);
   }
   if (chatSubtitle) {
     chatSubtitle.textContent = isDm ? "Direct messages with mesh nodes" : "Offline AI";
@@ -646,6 +806,7 @@ function openDmForNode(peerId) {
   }
   setChatPeerSelection(value, { syncWallet: true, persist: true });
   setChatMode(CHAT_MODE_DM, { focusInput: true });
+  refreshActiveDmChat();
 }
 
 function openCashuSendForNode(peerId) {
@@ -1007,6 +1168,12 @@ function applyTestMode() {
   const swapCashuTestHint = document.getElementById("swapCashuTestHint");
   if (swapLnTestHint) swapLnTestHint.hidden = !tm;
   if (swapCashuTestHint) swapCashuTestHint.hidden = !tm;
+
+  // BTC → Lightning via Boltz: not available on testnet/mutinynet
+  const sendBtcLnTestNotice = document.getElementById("sendBtcLnTestNotice");
+  const sendBtcLnProdBlock = document.getElementById("sendBtcLnProdBlock");
+  if (sendBtcLnTestNotice) sendBtcLnTestNotice.hidden = !tm;
+  if (sendBtcLnProdBlock) sendBtcLnProdBlock.hidden = tm;
 }
 
 function setWalletStatusRow() {
@@ -1631,6 +1798,7 @@ async function loadMessages() {
     latestMessages = latestMessages.slice(-300);
     logBox.innerHTML = "";
     latestMessages.forEach(appendLog);
+    renderChatPeerList();
     if (chatState.mode === CHAT_MODE_DM) {
       renderDmChat();
     }
@@ -1745,6 +1913,13 @@ if (chatModeAiButton) {
 if (chatModeDmButton) {
   chatModeDmButton.addEventListener("click", () => {
     setChatMode(CHAT_MODE_DM, { focusInput: true });
+    // Clear unread for currently selected peer when entering DM mode
+    if (chatState.selectedPeer) {
+      unreadPeers.delete(chatState.selectedPeer);
+      renderChatPeerList();
+    }
+    updateDmTabUnreadGlow();
+    refreshActiveDmChat();
   });
 }
 
@@ -1752,10 +1927,49 @@ if (chatPeerSelect) {
   chatPeerSelect.addEventListener("change", () => {
     setChatPeerSelection(chatPeerSelect.value, { syncWallet: true, persist: true });
     if (chatState.mode === CHAT_MODE_DM) {
-      renderDmChat();
+      refreshActiveDmChat();
     }
   });
 }
+
+if (chatPeerTrigger) {
+  chatPeerTrigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const listEl = document.getElementById("chatPeerList");
+    if (listEl) listEl.hidden = !listEl.hidden;
+  });
+}
+
+if (chatPeerCashuButton) {
+  chatPeerCashuButton.addEventListener("click", () => {
+    if (!chatState.selectedPeer) {
+      return;
+    }
+    openCashuSendForNode(chatState.selectedPeer);
+  });
+}
+
+chatPeerFilterButtons.forEach((button) => {
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const filterName = button.dataset.chatPeerFilter;
+    if (!filterName || !(filterName in chatState.peerFilters)) {
+      return;
+    }
+    chatState.peerFilters[filterName] = !chatState.peerFilters[filterName];
+    renderChatPeerFilters();
+    renderChatPeerList();
+  });
+});
+
+document.addEventListener("click", (e) => {
+  if (!chatPeerDropdown?.contains(e.target)) {
+    const listEl = document.getElementById("chatPeerList");
+    if (listEl) listEl.hidden = true;
+  }
+});
+
+renderChatPeerFilters();
 
 openModelManagerButton.addEventListener("click", openModelManager);
 openAiSettingsButton.addEventListener("click", openAiSettingsModal);
@@ -1813,6 +2027,93 @@ if (receiveCashuTab) {
     receiveBtcPanel.classList.add("hidden");
   });
 }
+
+// ── Send tab: Cashu / Bitcoin switcher ────────────────────────────────────────
+async function loadSendBtcPanel() {
+  if (!walletState.walletConfigured) {
+    if (sendBtcNoWallet) sendBtcNoWallet.hidden = false;
+    if (sendBtcContent) sendBtcContent.hidden = true;
+    return;
+  }
+  if (sendBtcNoWallet) sendBtcNoWallet.hidden = true;
+  if (sendBtcContent) sendBtcContent.hidden = false;
+  if (sendBtcBalance) sendBtcBalance.textContent = "Loading...";
+  try {
+    const bal = await fetchJson("/api/wallet/balance");
+    if (sendBtcBalance) {
+      sendBtcBalance.textContent = formatSats(bal.confirmed) +
+        (bal.unconfirmed ? ` (+${formatSats(bal.unconfirmed)} unconfirmed)` : "");
+    }
+  } catch { if (sendBtcBalance) sendBtcBalance.textContent = "—"; }
+  try {
+    const fees = await fetchJson("/api/wallet/fees");
+    if (sendBtcFeeRate && !sendBtcFeeRate.value) sendBtcFeeRate.value = fees.halfHourFee || 5;
+  } catch { /* ignore */ }
+}
+
+if (sendBtcTab) {
+  sendBtcTab.addEventListener("click", () => {
+    sendBtcTab.classList.add("is-active");
+    if (sendCashuTab) sendCashuTab.classList.remove("is-active");
+    if (sendBtcPanel) sendBtcPanel.hidden = false;
+    if (sendCashuPanel) sendCashuPanel.hidden = true;
+    loadSendBtcPanel();
+  });
+}
+if (sendCashuTab) {
+  sendCashuTab.addEventListener("click", () => {
+    sendCashuTab.classList.add("is-active");
+    if (sendBtcTab) sendBtcTab.classList.remove("is-active");
+    if (sendCashuPanel) sendCashuPanel.hidden = false;
+    if (sendBtcPanel) sendBtcPanel.hidden = true;
+  });
+}
+
+if (sendBtcForm) {
+  sendBtcForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const toAddress = sendBtcAddress ? sendBtcAddress.value.trim() : "";
+    const amountSats = Number(sendBtcAmount ? sendBtcAmount.value : 0);
+    const feeRate = Number(sendBtcFeeRate ? sendBtcFeeRate.value : 5) || 5;
+    if (!toAddress) { if (sendBtcStatus) sendBtcStatus.textContent = "Enter a Bitcoin address"; return; }
+    if (!amountSats || amountSats < 546) { if (sendBtcStatus) sendBtcStatus.textContent = "Minimum amount is 546 sats"; return; }
+    if (sendBtcStatus) sendBtcStatus.textContent = "Broadcasting...";
+    try {
+      const data = await fetchJson("/api/wallet/send", {
+        method: "POST",
+        body: JSON.stringify({ toAddress, amountSats, feeRate }),
+      });
+      const explorer = walletState.testMode ? "https://mutinynet.com/tx/" : "https://mempool.space/tx/";
+      if (sendBtcStatus) sendBtcStatus.innerHTML = `Sent! <a href="${explorer}${data.txid}" target="_blank" rel="noopener">${data.txid.slice(0, 12)}…</a> · fee: ${formatSats(data.fee)}`;
+      if (sendBtcAddress) sendBtcAddress.value = "";
+      if (sendBtcAmount) sendBtcAmount.value = "";
+      setTimeout(loadSendBtcPanel, 2000);
+    } catch (err) { if (sendBtcStatus) sendBtcStatus.textContent = err.message; }
+  });
+}
+
+if (sendBtcLnForm) {
+  sendBtcLnForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const invoice = sendBtcLnInvoice ? sendBtcLnInvoice.value.trim() : "";
+    if (!invoice) { if (sendBtcLnStatus) sendBtcLnStatus.textContent = "Enter a Lightning invoice"; return; }
+    const tm = walletState.testMode;
+    const lower = invoice.toLowerCase();
+    if (tm && !lower.startsWith("lntbs")) { if (sendBtcLnStatus) sendBtcLnStatus.textContent = "Test mode: use lntbs… (signet) invoice"; return; }
+    if (!tm && !lower.startsWith("lnbc")) { if (sendBtcLnStatus) sendBtcLnStatus.textContent = "Use lnbc… (mainnet) invoice"; return; }
+    if (sendBtcLnStatus) sendBtcLnStatus.textContent = "Creating swap...";
+    try {
+      const data = await fetchJson("/api/wallet/pay-lightning", {
+        method: "POST",
+        body: JSON.stringify({ invoice }),
+      });
+      if (sendBtcLnStatus) sendBtcLnStatus.textContent = `Swap created · ${formatSats(data.expectedAmount)} BTC sent · waiting for Lightning payment…`;
+      if (sendBtcLnInvoice) sendBtcLnInvoice.value = "";
+      setTimeout(loadSendBtcPanel, 2000);
+    } catch (err) { if (sendBtcLnStatus) sendBtcLnStatus.textContent = err.message; }
+  });
+}
+// ── End Send BTC ──────────────────────────────────────────────────────────────
 
 walletCopyReceiveIdButton.addEventListener("click", async () => {
   if (!walletReceiveId.value) return;
@@ -2038,6 +2339,15 @@ function renderActiveSwaps(swaps) {
     const amt = s.amount ? `${s.amount} sats` : "";
     el.innerHTML = `<span class="wallet-pending-label">${dir} ${amt}</span><span class="wallet-pending-status">${s.status}</span>`;
     activeSwapsList.appendChild(el);
+  });
+}
+
+if (clearSwapsButton) {
+  clearSwapsButton.addEventListener("click", async () => {
+    try {
+      await fetchJson("/api/swap/clear", { method: "POST" });
+      renderActiveSwaps([]);
+    } catch { /* ignore */ }
   });
 }
 
@@ -2509,6 +2819,15 @@ function connectEvents() {
     latestMessages.push(message);
     latestMessages = latestMessages.slice(-300);
     appendLog(message);
+    // Track unread incoming DM messages
+    if (message.direction === "in" && message.sender) {
+      const isCurrentPeer = message.sender === chatState.selectedPeer && chatState.mode === CHAT_MODE_DM;
+      if (!isCurrentPeer) {
+        unreadPeers.add(message.sender);
+        renderChatPeerList();
+        updateDmTabUnreadGlow();
+      }
+    }
     if (chatState.mode === CHAT_MODE_DM) {
       renderDmChat();
     }
@@ -2548,4 +2867,3 @@ loadStatus();
 loadMessages();
 loadNodes();
 connectEvents();
-

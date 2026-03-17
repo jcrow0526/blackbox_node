@@ -98,19 +98,46 @@
               </div>
             </div>
             <div id="chatPeerRow" class="chat-peer-row hidden">
-              <label class="chat-peer-field" for="chatPeerSelect">
-                <span>Recipient node</span>
-                <select id="chatPeerSelect">
-                  <option value="">Select node</option>
-                </select>
-              </label>
+              <div class="chat-peer-field">
+                <div class="chat-peer-header">
+                  <span>Recipient node</span>
+                  <div class="chat-peer-filters" aria-label="Recipient node filters">
+                    <button type="button" class="chat-peer-filter-btn" data-chat-peer-filter="unread">Unread</button>
+                    <button type="button" class="chat-peer-filter-btn" data-chat-peer-filter="active">Active</button>
+                    <button type="button" class="chat-peer-filter-btn" data-chat-peer-filter="online">Online</button>
+                  </div>
+                </div>
+                <select id="chatPeerSelect" hidden></select>
+                <div class="chat-peer-controls">
+                  <div id="chatPeerDropdown" class="chat-peer-dropdown">
+                    <button id="chatPeerTrigger" type="button" class="chat-peer-trigger">
+                      <span id="chatPeerLabel">Select node</span>
+                      <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                    </button>
+                    <div id="chatPeerList" class="chat-peer-list" hidden>
+                      <div class="chat-peer-empty">No nodes found</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
             <div id="chatReplyBox" class="chat-reply-box">
               <div id="chatReplyText" class="chat-reply-text"></div>
           </div>
           <div class="chat-compose">
             <textarea id="chatText" rows="3" placeholder="Write a message. Enter to send, Shift+Enter for new line."></textarea>
-            <button type="submit">Send</button>
+            <button id="chatPeerCashuButton" type="button" class="node-action-btn node-action-cashu chat-compose-cashu-btn" title="Send Cashu" aria-label="Send Cashu to selected node" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="12" r="7"></circle>
+                <path d="M12 8v8M9 10h6M9 14h6"></path>
+              </svg>
+            </button>
+            <button type="submit" class="chat-send-button" title="Send" aria-label="Send message">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 18V6"></path>
+                <path d="M7 11l5-5 5 5"></path>
+              </svg>
+            </button>
           </div>
         </form>
       </article>
@@ -437,8 +464,13 @@
 
             <!-- Card A: Lightning → Cashu -->
             <div class="wallet-fund-card">
-              <div class="modal-label">Lightning &#x2192; Cashu</div>
-              <div class="wallet-hint" style="margin-bottom:8px">
+              <div class="swap-card-header">
+                <div class="modal-label">Lightning &#x2192; Cashu</div>
+                <button type="button" class="swap-info-btn" aria-label="Info" onclick="document.getElementById('swapLnInfoPopup').hidden=!document.getElementById('swapLnInfoPopup').hidden">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="7" cy="7" r="6.5" stroke="currentColor"/><rect x="6.3" y="6" width="1.4" height="4.5" rx="0.7" fill="currentColor"/><circle cx="7" cy="3.8" r="0.8" fill="currentColor"/></svg>
+                </button>
+              </div>
+              <div id="swapLnInfoPopup" class="swap-info-popup" hidden>
                 Enter an amount and click <strong>Get invoice</strong>. Pay the QR that appears below, then your balance updates automatically.
                 <span id="swapLnTestHint" hidden> &mdash; TEST MODE: this is a signet invoice, pay at <a href="https://faucet.mutinynet.com" target="_blank" rel="noopener noreferrer" style="color:var(--success)">faucet.mutinynet.com</a> (Lightning tab). Mainnet wallets cannot pay it.</span>
               </div>
@@ -478,8 +510,13 @@
 
             <!-- Card B: Cashu → Lightning -->
             <div class="wallet-fund-card">
-              <div class="modal-label">Cashu &#x2192; Lightning</div>
-              <div class="wallet-hint" style="margin-bottom:8px">
+              <div class="swap-card-header">
+                <div class="modal-label">Cashu &#x2192; Lightning</div>
+                <button type="button" class="swap-info-btn" aria-label="Info" onclick="document.getElementById('swapCashuInfoPopup').hidden=!document.getElementById('swapCashuInfoPopup').hidden">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="7" cy="7" r="6.5" stroke="currentColor"/><rect x="6.3" y="6" width="1.4" height="4.5" rx="0.7" fill="currentColor"/><circle cx="7" cy="3.8" r="0.8" fill="currentColor"/></svg>
+                </button>
+              </div>
+              <div id="swapCashuInfoPopup" class="swap-info-popup" hidden>
                 Paste a Lightning invoice to pay it from your Cashu balance. Amount is read from the invoice automatically.
                 <span id="swapCashuTestHint" hidden> &mdash; TEST MODE: paste a signet invoice (<strong>lntbs...</strong>). Mainnet invoices (<strong>lnbc...</strong>) will be rejected.</span>
               </div>
@@ -506,7 +543,10 @@
 
             <!-- Active Swaps -->
             <div class="wallet-fund-card" id="activeSwapsCard" hidden>
-              <div class="modal-label">Active Swaps</div>
+              <div class="swap-card-header">
+                <div class="modal-label">Active Swaps</div>
+                <button id="clearSwapsButton" type="button" class="wallet-token-copy-btn">Clear</button>
+              </div>
               <div id="activeSwapsList" class="wallet-pending-list"></div>
             </div>
 
@@ -516,65 +556,124 @@
             <div class="wallet-screen-head">
               <div>
                 <h3 id="walletSendTitle">Send</h3>
-                <div class="wallet-home-subtitle">Cashu token via Meshtastic DM</div>
               </div>
             </div>
 
-            <div id="cashuSendNoMint" class="wallet-no-wallet-notice">
-              <p>No Cashu mint set. Configure in Settings.</p>
-              <button type="button" class="wallet-inline-action" data-wallet-view="settings">Go to Settings</button>
+            <div class="wallet-receive-tabs">
+              <button id="sendCashuTab" type="button" class="wallet-receive-tab is-active">Cashu</button>
+              <button id="sendBtcTab" type="button" class="wallet-receive-tab">Bitcoin</button>
             </div>
 
-            <div id="cashuSendContent" hidden>
-              <div class="wallet-balance-pill">
-                <span>Available:</span> <strong id="cashuSendAvailable">0 sats</strong>
+            <!-- Cashu panel -->
+            <div id="sendCashuPanel">
+              <div id="cashuSendNoMint" class="wallet-no-wallet-notice">
+                <p>No Cashu mint set. Configure in Settings.</p>
+                <button type="button" class="wallet-inline-action" data-wallet-view="settings">Go to Settings</button>
               </div>
-              <form id="walletSendForm" class="wallet-form-grid">
-                <label class="wallet-field" for="walletAmountInput">
-                  <span>Amount (sats)</span>
-                  <input id="walletAmountInput" type="number" min="1" step="1" inputmode="decimal" placeholder="1000">
-                </label>
-                <label class="wallet-field" for="walletRecipientInput">
-                  <span>Recipient node</span>
-                  <select id="walletRecipientInput">
-                    <option value="">Select node</option>
-                  </select>
-                </label>
-                <label class="wallet-field" for="walletTransportSelect">
-                  <span>Transport</span>
-                  <select id="walletTransportSelect">
-                    <option value="Meshtastic DM">Meshtastic DM</option>
-                    <option value="Manual copy">Manual copy</option>
-                  </select>
-                </label>
-                <label class="wallet-field wallet-field-wide" for="walletMemoInput">
-                  <span>Memo</span>
-                  <input id="walletMemoInput" type="text" placeholder="optional">
-                </label>
-                <div class="wallet-form-actions wallet-field-wide">
-                  <button type="submit">Create token &amp; send</button>
-                  <div id="walletSendStatus" class="device-status-text" role="status" aria-live="polite"></div>
+              <div id="cashuSendContent" hidden>
+                <div class="wallet-section-divider">Send off-grid</div>
+                <div class="wallet-balance-pill">
+                  <span>Available:</span> <strong id="cashuSendAvailable">0 sats</strong>
                 </div>
-              </form>
-              <div id="cashuSendTokenBlock" class="wallet-token-card" hidden>
-                <div class="wallet-token-card-header">
-                  <span class="wallet-token-card-label">Cashu token</span>
-                  <button id="cashuCopyTokenButton" type="button" class="wallet-token-copy-btn">Copy</button>
+                <form id="walletSendForm" class="wallet-form-grid">
+                  <label class="wallet-field" for="walletAmountInput">
+                    <span>Amount (sats)</span>
+                    <input id="walletAmountInput" type="number" min="1" step="1" inputmode="decimal" placeholder="1000">
+                  </label>
+                  <label class="wallet-field" for="walletRecipientInput">
+                    <span>Recipient node</span>
+                    <select id="walletRecipientInput">
+                      <option value="">Select node</option>
+                    </select>
+                  </label>
+                  <label class="wallet-field" for="walletTransportSelect">
+                    <span>Transport</span>
+                    <select id="walletTransportSelect">
+                      <option value="Meshtastic DM">Meshtastic DM</option>
+                      <option value="Manual copy">Manual copy</option>
+                    </select>
+                  </label>
+                  <label class="wallet-field wallet-field-wide" for="walletMemoInput">
+                    <span>Memo</span>
+                    <input id="walletMemoInput" type="text" placeholder="optional">
+                  </label>
+                  <div class="wallet-form-actions wallet-field-wide">
+                    <button type="submit">Create token &amp; send</button>
+                    <div id="walletSendStatus" class="device-status-text" role="status" aria-live="polite"></div>
+                  </div>
+                </form>
+                <div id="cashuSendTokenBlock" class="wallet-token-card" hidden>
+                  <div class="wallet-token-card-header">
+                    <span class="wallet-token-card-label">Cashu token</span>
+                    <button id="cashuCopyTokenButton" type="button" class="wallet-token-copy-btn">Copy</button>
+                  </div>
+                  <div class="wallet-token-code" id="cashuSendTokenOutput"></div>
                 </div>
-                <div class="wallet-token-code" id="cashuSendTokenOutput"></div>
+                <div class="wallet-section-divider">Pay Lightning invoice</div>
+                <form id="cashuMeltForm" class="wallet-form-grid">
+                  <label class="wallet-field wallet-field-wide" for="cashuMeltInput">
+                    <span>Lightning invoice</span>
+                    <input id="cashuMeltInput" type="text" placeholder="lnbc...">
+                  </label>
+                  <div class="wallet-form-actions wallet-field-wide">
+                    <button type="submit">Pay invoice</button>
+                    <div id="cashuMeltStatus" class="device-status-text" role="status" aria-live="polite"></div>
+                  </div>
+                </form>
               </div>
+            </div>
 
-              <div class="wallet-section-divider">Pay Lightning invoice</div>
-              <form id="cashuMeltForm" class="wallet-form-grid">
-                <label class="wallet-field wallet-field-wide" for="cashuMeltInput">
-                  <span>Lightning invoice</span>
-                  <input id="cashuMeltInput" type="text" placeholder="lnbc...">
-                </label>
-                <div class="wallet-form-actions wallet-field-wide">
-                  <button type="submit">Pay invoice</button>
-                  <div id="cashuMeltStatus" class="device-status-text" role="status" aria-live="polite"></div>
+            <!-- Bitcoin panel -->
+            <div id="sendBtcPanel" hidden>
+              <div id="sendBtcNoWallet" class="wallet-no-wallet-notice" hidden>
+                <p>No wallet created yet.</p>
+                <button type="button" class="wallet-inline-action" data-wallet-view="settings">Go to Settings</button>
+              </div>
+              <div id="sendBtcContent" hidden>
+                <div class="wallet-section-divider">Send on-chain</div>
+                <div class="wallet-balance-pill">
+                  <span>On-chain:</span> <strong id="sendBtcBalance">— sats</strong>
                 </div>
-              </form>
+                <form id="sendBtcForm" class="wallet-form-grid">
+                  <label class="wallet-field wallet-field-wide" for="sendBtcAddress">
+                    <span>Bitcoin address</span>
+                    <input id="sendBtcAddress" type="text" placeholder="bc1q...">
+                  </label>
+                  <label class="wallet-field" for="sendBtcAmount">
+                    <span>Amount (sats)</span>
+                    <input id="sendBtcAmount" type="number" min="546" step="1" placeholder="10000">
+                  </label>
+                  <label class="wallet-field" for="sendBtcFeeRate">
+                    <span>Fee rate (sat/vB)</span>
+                    <input id="sendBtcFeeRate" type="number" min="1" step="1" placeholder="5">
+                  </label>
+                  <div class="wallet-form-actions wallet-field-wide">
+                    <button type="submit">Send Bitcoin</button>
+                    <div id="sendBtcStatus" class="device-status-text" role="status" aria-live="polite"></div>
+                  </div>
+                </form>
+
+                <div class="wallet-section-divider">Pay Lightning invoice</div>
+                <!-- Test mode: Boltz doesn't support signet/mutinynet -->
+                <div id="sendBtcLnTestNotice" class="wallet-hint" hidden>
+                  Lightning payment via BTC is not available in test mode (Boltz doesn't support mutinynet/signet).
+                  Use <strong>Cashu → Lightning</strong> instead.
+                </div>
+                <!-- Prod mode: Boltz mainnet -->
+                <div id="sendBtcLnProdBlock">
+                  <div class="wallet-hint" style="margin-bottom:6px">Pays via Boltz submarine swap — your on-chain BTC funds the swap, Boltz pays the Lightning invoice.</div>
+                  <form id="sendBtcLnForm" class="wallet-form-grid">
+                    <label class="wallet-field wallet-field-wide" for="sendBtcLnInvoice">
+                      <span>Lightning invoice (lnbc…)</span>
+                      <input id="sendBtcLnInvoice" type="text" placeholder="lnbc...">
+                    </label>
+                    <div class="wallet-form-actions wallet-field-wide">
+                      <button type="submit">Pay via swap</button>
+                      <div id="sendBtcLnStatus" class="device-status-text" role="status" aria-live="polite"></div>
+                    </div>
+                  </form>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -597,6 +696,7 @@
               </div>
 
               <div id="walletReceiveContent" hidden>
+                <div class="wallet-section-divider">Receive on-chain</div>
                 <div class="wallet-qr-block">
                   <div id="walletQrContainer" class="wallet-qr-container">
                     <div id="walletQrLoading" class="wallet-qr-loading">Loading QR...</div>
@@ -617,6 +717,7 @@
             </div>
 
             <div id="receiveCashuPanel" class="hidden">
+              <div class="wallet-section-divider">Receive off-grid</div>
               <div class="wallet-hint" style="margin-bottom:8px">Paste a <strong>cashuA…</strong> token received via Meshtastic DM or any other channel.</div>
               <form id="cashuReceiveForm" class="wallet-form-grid">
                 <label class="wallet-field wallet-field-wide" for="cashuReceiveInput">
@@ -839,7 +940,3 @@
   <script src="/static/app.js" defer></script>
 </body>
 </html>
-
-
-
-
