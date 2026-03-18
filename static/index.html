@@ -419,6 +419,12 @@
                   <div id="cashuBalanceValue" class="wallet-balance-value">—</div>
                   <button type="button" class="wallet-fund-shortcut" data-wallet-view="swap">Swap</button>
                 </div>
+                <div id="cashuPendingRow" class="wallet-balance-sub-row" hidden>
+                  <span class="wallet-balance-sub" style="color:#f5a623">+<span id="cashuPendingValue">0</span> sats unconfirmed (offline)</span>
+                  <button id="cashuSwapPendingBtn" type="button" class="wallet-icon-button" title="Confirm now" aria-label="Confirm pending proofs" style="margin-left:6px">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+                  </button>
+                </div>
                 <div class="wallet-balance-sub-row">
                   <span id="cashuBalanceSub" class="wallet-balance-sub">No mint set</span>
                   <button id="walletRefreshBalance" type="button" class="wallet-icon-button" title="Refresh" aria-label="Refresh balances" hidden>

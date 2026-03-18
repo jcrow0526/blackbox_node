@@ -98,6 +98,9 @@ const walletHomeNoWallet = document.getElementById("walletHomeNoWallet");
 const walletHomeSummary = document.getElementById("walletHomeSummary");
 const cashuBalanceValue = document.getElementById("cashuBalanceValue");
 const cashuBalanceSub = document.getElementById("cashuBalanceSub");
+const cashuPendingRow = document.getElementById("cashuPendingRow");
+const cashuPendingValue = document.getElementById("cashuPendingValue");
+const cashuSwapPendingBtn = document.getElementById("cashuSwapPendingBtn");
 // Fund
 const cashuMintUrlInput = document.getElementById("cashuMintUrlInput");
 const cashuSetMintButton = document.getElementById("cashuSetMintButton");
@@ -237,9 +240,14 @@ const cashuState = {
   configured: false,
   mintUrl: null,
   balance: 0,
+  pendingBalance: 0,
   pendingInvoices: [],
   currentInvoiceHash: null,
 };
+
+// Tracks tokens already redeemed in this session so the button stays disabled
+// across re-renders of renderDmChat().
+const redeemedCashuTokens = new Set();
 
 const walletState = {
   walletConfigured: false,
@@ -602,8 +610,16 @@ function parseMeshPart(text) {
   return { partNum: Number(m[1]), total: Number(m[2]), content: text.slice(m[0].length) };
 }
 
-// Group sequential [N/T] mesh fragments from the same sender into one virtual message
-// if the assembled content is a Cashu token. Returns a new array with merged messages.
+// Extract sats from the first fragment's content, e.g. "[250 sats] cashuA..." → 250
+function extractSatsFromFragment(content) {
+  const m = /^\[(\d+)\s*sats?\]/i.exec((content || "").trim());
+  return m ? Number(m[1]) : null;
+}
+
+// Group sequential [N/T] mesh fragments from the same sender into one virtual message.
+// - All parts present + assembled is a Cashu token → { isCashuToken: true, fragmentCount }
+// - Starts at [1/T] but incomplete → { isCashuFragment: true, receivedParts, totalParts, sats }
+// - Orphaned fragments (no [1/T]) fall through as regular messages
 function groupCashuFragments(thread) {
   const result = [];
   let i = 0;
@@ -611,24 +627,33 @@ function groupCashuFragments(thread) {
     const msg = thread[i];
     const part = parseMeshPart(msg.text);
 
-    // Try to collect a complete multi-part cashu token starting at [1/T]
     if (part && part.partNum === 1 && part.total > 1) {
-      const parts = [part.content];
-      let valid = true;
-      for (let k = 1; k < part.total; k++) {
+      // Count how many consecutive parts we actually have
+      let k = 1;
+      while (k < part.total) {
         const next = thread[i + k];
-        if (!next || next.sender !== msg.sender) { valid = false; break; }
+        if (!next || next.sender !== msg.sender) break;
         const np = parseMeshPart(next.text);
-        if (!np || np.partNum !== k + 1 || np.total !== part.total) { valid = false; break; }
-        parts.push(np.content);
+        if (!np || np.partNum !== k + 1 || np.total !== part.total) break;
+        k++;
       }
-      if (valid) {
+
+      if (k === part.total) {
+        // All parts present — assemble and check
+        const parts = [];
+        for (let j = 0; j < part.total; j++) parts.push(parseMeshPart(thread[i + j].text).content);
         const assembled = parts.join("");
         if (isCashuTokenText(assembled)) {
           result.push({ ...msg, text: assembled, isCashuToken: true, fragmentCount: part.total });
           i += part.total;
           continue;
         }
+      } else {
+        // Partial transfer in progress — show progress bar
+        const sats = extractSatsFromFragment(part.content);
+        result.push({ ...msg, isCashuFragment: true, receivedParts: k, totalParts: part.total, sats });
+        i += k;
+        continue;
       }
     }
 
@@ -677,11 +702,47 @@ function renderDmChat() {
     const body = document.createElement("div");
     body.className = "chat-bubble-body";
 
-    if (message.isCashuToken) {
+    if (message.isCashuFragment) {
+      const { receivedParts, totalParts, sats } = message;
+      const isOutgoingFragment = message.direction === "out";
+
+      if (sats !== null) {
+        const amountBadge = document.createElement("div");
+        amountBadge.style.cssText = `font-size:1.1em;font-weight:bold;color:${isOutgoingFragment ? "#aaa" : "#7ecfaa"};margin-bottom:6px`;
+        amountBadge.textContent = isOutgoingFragment ? `-${sats} sats` : `+${sats} sats`;
+        body.appendChild(amountBadge);
+      }
+
+      const label = document.createElement("div");
+      label.style.cssText = "font-size:0.75em;opacity:0.65;margin-bottom:7px";
+      label.textContent = isOutgoingFragment
+        ? `Sending... ${receivedParts} / ${totalParts} parts`
+        : `Receiving Cashu token... ${receivedParts} / ${totalParts} parts`;
+      body.appendChild(label);
+
+      const BLOCK_COUNT = 20;
+      const filledBlocks = Math.round((receivedParts / totalParts) * BLOCK_COUNT);
+      const blockTrack = document.createElement("div");
+      blockTrack.style.cssText = "display:flex;gap:2px;align-items:center;margin-top:2px";
+      for (let b = 0; b < BLOCK_COUNT; b++) {
+        const block = document.createElement("div");
+        const filled = b < filledBlocks;
+        block.style.cssText = [
+          "width:7px",
+          "height:13px",
+          "flex-shrink:0",
+          filled
+            ? "background:#7ecfaa;box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),inset 0 -1px 0 rgba(0,0,0,0.35),inset 1px 0 0 rgba(255,255,255,0.15),inset -1px 0 0 rgba(0,0,0,0.2)"
+            : "background:rgba(255,255,255,0.08);box-shadow:inset 0 1px 0 rgba(255,255,255,0.06),inset 0 -1px 0 rgba(0,0,0,0.25)",
+        ].join(";");
+        blockTrack.appendChild(block);
+      }
+      body.appendChild(blockTrack);
+
+    } else if (message.isCashuToken) {
       const parsed = parseCashuMessage(message.text.trim());
       const token = parsed ? parsed.token : message.text.trim();
       const sats = parsed ? parsed.sats : null;
-
       // Amount badge
       if (sats !== null) {
         const amountBadge = document.createElement("div");
@@ -696,11 +757,21 @@ function renderDmChat() {
       body.appendChild(tokenHint);
 
       const redeemBtn = document.createElement("button");
-      redeemBtn.textContent = "Redeem";
       redeemBtn.className = "wallet-action-button";
       redeemBtn.style.cssText = "padding:7px 22px;font-size:0.88em;";
       const statusSpan = document.createElement("span");
       statusSpan.style.cssText = "display:block;font-size:0.8em;margin-top:6px;opacity:0.8";
+
+      const alreadyRedeemed = redeemedCashuTokens.has(token);
+      if (alreadyRedeemed) {
+        redeemBtn.textContent = "Redeemed";
+        redeemBtn.disabled = true;
+        bubble.style.opacity = "0.45";
+        bubble.style.pointerEvents = "none";
+        bubble.style.filter = "grayscale(0.4)";
+      } else {
+        redeemBtn.textContent = "Redeem";
+      }
 
       redeemBtn.addEventListener("click", async () => {
         redeemBtn.disabled = true;
@@ -710,7 +781,10 @@ function renderDmChat() {
             method: "POST",
             body: JSON.stringify({ token }),
           });
-          statusSpan.textContent = `+${data.amount} sats added to balance`;
+          redeemedCashuTokens.add(token);
+          statusSpan.textContent = data.unverified
+            ? `+${data.amount} sats (offline, unverified — confirm when online)`
+            : `+${data.amount} sats added to balance`;
           redeemBtn.textContent = "Redeemed";
           if (cashuState) { cashuState.balance = data.balance; applyCashuState(); }
           bubble.style.opacity = "0.45";
@@ -1335,6 +1409,12 @@ function applyCashuState() {
   if (cashuBalanceSub) cashuBalanceSub.textContent = cfg ? (cashuState.mintUrl || "") : "No mint configured — go to Fund";
   if (cashuSendAvailable) cashuSendAvailable.textContent = formatSats(cashuState.balance);
   if (swapCashuAvailable) swapCashuAvailable.textContent = formatSats(cashuState.balance);
+  // Pending (offline) balance row
+  if (cashuPendingRow) {
+    const hasPending = cashuState.pendingBalance > 0;
+    cashuPendingRow.hidden = !hasPending;
+    if (hasPending && cashuPendingValue) cashuPendingValue.textContent = cashuState.pendingBalance;
+  }
   if (walletRefreshBalance) walletRefreshBalance.hidden = false;
   // Mint input sync
   if (cashuMintUrlInput && cashuState.mintUrl && !cashuMintUrlInput.value) {
@@ -1368,6 +1448,7 @@ async function loadCashuState() {
     cashuState.configured = data.configured;
     cashuState.mintUrl = data.mintUrl || null;
     cashuState.balance = data.balance || 0;
+    cashuState.pendingBalance = data.pendingBalance || 0;
     cashuState.pendingInvoices = data.pendingInvoices || [];
     // Merge blockchain history with cashu history
     if (data.history && data.history.length) {
@@ -1383,7 +1464,44 @@ async function loadCashuState() {
       renderWalletHistory();
     }
     applyCashuState();
+    if (cashuState.pendingBalance > 0) startSwapPendingPoller();
   } catch { /* offline */ }
+}
+
+// Swap pending offline proofs at the mint and update UI
+async function trySwapPending() {
+  if (!cashuState.pendingBalance) return;
+  try {
+    const data = await fetchJson("/api/cashu/swap-pending", { method: "POST" });
+    cashuState.balance = data.balance;
+    cashuState.pendingBalance = data.pendingBalance || 0;
+    applyCashuState();
+    if (data.swapped > 0) {
+      walletState.history.unshift({ id: `cashu-confirm-${Date.now()}`, direction: "Confirmed", peer: "Pending proofs", amount: data.swapped, unit: "sats", status: "Confirmed", timestamp: new Date().toLocaleString() });
+      renderWalletHistory();
+    }
+  } catch { /* still offline */ }
+}
+
+// Auto-poll: try to confirm pending proofs every 30s when there are any
+let _swapPendingInterval = null;
+function startSwapPendingPoller() {
+  if (_swapPendingInterval) return;
+  _swapPendingInterval = setInterval(() => {
+    if (cashuState.pendingBalance > 0) trySwapPending();
+    else stopSwapPendingPoller();
+  }, 30000);
+}
+function stopSwapPendingPoller() {
+  if (_swapPendingInterval) { clearInterval(_swapPendingInterval); _swapPendingInterval = null; }
+}
+
+if (cashuSwapPendingBtn) {
+  cashuSwapPendingBtn.addEventListener("click", async () => {
+    cashuSwapPendingBtn.disabled = true;
+    await trySwapPending();
+    cashuSwapPendingBtn.disabled = false;
+  });
 }
 
 // ─── End Cashu UI ─────────────────────────────────────────────────────────────
@@ -2312,10 +2430,13 @@ cashuReceiveForm.addEventListener("submit", async (event) => {
   try {
     const data = await fetchJson("/api/cashu/receive", { method: "POST", body: JSON.stringify({ token }) });
     cashuState.balance = data.balance;
-    cashuReceiveStatus.textContent = `Received ${data.amount} sats! Balance: ${data.balance} sats`;
+    cashuReceiveStatus.textContent = data.unverified
+      ? `Accepted ${data.amount} sats offline (unverified — redeem online to confirm)`
+      : `Received ${data.amount} sats! Balance: ${data.balance} sats`;
     cashuReceiveInput.value = "";
     applyCashuState();
-    walletState.history.unshift({ id: `cashu-recv-${Date.now()}`, direction: "Received", peer: "Cashu token", amount: data.amount, unit: "sats", status: "Confirmed", timestamp: new Date().toLocaleString() });
+    const recvStatus = data.unverified ? "Unverified (offline)" : "Confirmed";
+    walletState.history.unshift({ id: `cashu-recv-${Date.now()}`, direction: "Received", peer: "Cashu token", amount: data.amount, unit: "sats", status: recvStatus, timestamp: new Date().toLocaleString() });
     renderWalletHistory();
   } catch (e) {
     cashuReceiveStatus.textContent = e.message;
@@ -2544,10 +2665,13 @@ if (swapCashuReceiveForm) {
     try {
       const data = await fetchJson("/api/cashu/receive", { method: "POST", body: JSON.stringify({ token }) });
       cashuState.balance = data.balance;
-      if (swapCashuReceiveStatus) swapCashuReceiveStatus.textContent = `Received ${data.amount} sats! Balance: ${data.balance} sats`;
+      if (swapCashuReceiveStatus) swapCashuReceiveStatus.textContent = data.unverified
+        ? `Accepted ${data.amount} sats offline (unverified — redeem online to confirm)`
+        : `Received ${data.amount} sats! Balance: ${data.balance} sats`;
       if (swapCashuReceiveInput) swapCashuReceiveInput.value = "";
       applyCashuState();
-      walletState.history.unshift({ id: `cashu-recv-${Date.now()}`, direction: "Received", peer: "Cashu token", amount: data.amount, unit: "sats", status: "Confirmed", timestamp: new Date().toLocaleString() });
+      const swapStatus = data.unverified ? "Unverified (offline)" : "Confirmed";
+      walletState.history.unshift({ id: `cashu-recv-${Date.now()}`, direction: "Received", peer: "Cashu token", amount: data.amount, unit: "sats", status: swapStatus, timestamp: new Date().toLocaleString() });
       renderWalletHistory();
     } catch (e) {
       if (swapCashuReceiveStatus) swapCashuReceiveStatus.textContent = e.message;

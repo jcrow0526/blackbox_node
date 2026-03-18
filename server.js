@@ -678,12 +678,17 @@ function getCashuBalance() {
   return (getActiveCashuData().proofs || []).reduce((sum, p) => sum + (p.amount || 0), 0);
 }
 
+function getCashuPendingBalance() {
+  return (getActiveCashuData().pendingSwapProofs || []).reduce((sum, p) => sum + (p.amount || 0), 0);
+}
+
 function getCashuPayload() {
   const cd = getActiveCashuData();
   return {
     configured: Boolean(cd.mintUrl),
     mintUrl: cd.mintUrl || null,
     balance: getCashuBalance(),
+    pendingBalance: getCashuPendingBalance(),
     proofCount: (cd.proofs || []).length,
     pendingInvoices: (cd.pendingInvoices || []).map((inv) => ({
       hash: inv.hash,
@@ -779,13 +784,57 @@ async function cashuCheckInvoice(hash) {
   return { balance: getCashuBalance(), amount: pending.amount };
 }
 
+// Select proofs that exactly sum to amount without contacting the mint.
+// Cashu uses power-of-2 denominations, so greedy descending always finds
+// an exact match when the denominations are available.
+// Returns { send, returnChange } or null if exact match is impossible.
+function selectProofsExact(amount, proofs) {
+  const sorted = [...proofs].sort((a, b) => b.amount - a.amount);
+  const send = [];
+  const keep = [];
+  let remaining = amount;
+  for (const proof of sorted) {
+    if (remaining > 0 && proof.amount <= remaining) {
+      send.push(proof);
+      remaining -= proof.amount;
+    } else {
+      keep.push(proof);
+    }
+  }
+  if (remaining !== 0) return null;
+  return { send, returnChange: keep };
+}
+
 async function cashuSendToken(amount) {
-  const { wallet } = await cashuGetWallet();
   const { getEncodedToken } = require("@cashu/cashu-ts");
   if (getCashuBalance() < amount) throw new Error(`Insufficient balance (have ${getCashuBalance()} sats)`);
   const cd = getActiveCashuData();
+
+  // Try offline-first: select proofs without contacting the mint.
+  // Works when available denominations can exactly represent the amount.
+  const offline = selectProofsExact(amount, cd.proofs);
+  if (offline) {
+    cd.proofs = offline.returnChange;
+    // Remove sent proof secrets from receivedSecrets so the sender can reclaim
+    // the token if the recipient never redeems it.
+    if (cd.receivedSecrets) {
+      const sentSecrets = new Set(offline.send.map((p) => p.secret));
+      cd.receivedSecrets = cd.receivedSecrets.filter((s) => !sentSecrets.has(s));
+    }
+    persistActiveCashu();
+    const token = getEncodedToken({ token: [{ mint: cd.mintUrl, proofs: offline.send }] });
+    return { token, amount };
+  }
+
+  // Exact change not possible — need mint to split proofs (requires internet).
+  const { wallet } = await cashuGetWallet();
   const { send, returnChange } = await wallet.send(amount, cd.proofs);
   cd.proofs = returnChange || [];
+  // Same: remove sent secrets so sender can reclaim if needed.
+  if (cd.receivedSecrets) {
+    const sentSecrets = new Set(send.map((p) => p.secret));
+    cd.receivedSecrets = cd.receivedSecrets.filter((s) => !sentSecrets.has(s));
+  }
   persistActiveCashu();
   const token = getEncodedToken({ token: [{ mint: cd.mintUrl, proofs: send }] });
   return { token, amount };
@@ -795,18 +844,77 @@ async function cashuReceiveToken(tokenString) {
   const { getDecodedToken, CashuMint, CashuWallet } = require("@cashu/cashu-ts");
   const decoded = getDecodedToken(tokenString.trim());
   const tokenMintUrl = decoded.token[0].mint;
-  const mint = new CashuMint(tokenMintUrl);
+  const incomingProofs = decoded.token.flatMap((e) => e.proofs);
+
+  // Deduplication: reject if any proof secret was already received (prevents double-redeem).
+  const cd = getActiveCashuData();
+  cd.receivedSecrets = cd.receivedSecrets || [];
+  const receivedSet = new Set(cd.receivedSecrets);
+  if (incomingProofs.some((p) => receivedSet.has(p.secret))) {
+    throw new Error("Token already redeemed");
+  }
+
+  function recordSecrets(proofs) {
+    cd.receivedSecrets = [...(cd.receivedSecrets || []), ...proofs.map((p) => p.secret)];
+    // Cap to last 2000 secrets to avoid unbounded growth
+    if (cd.receivedSecrets.length > 2000) cd.receivedSecrets = cd.receivedSecrets.slice(-2000);
+  }
+
+  // Try online receive (swaps proofs at mint for fresh ones, validates against double-spend).
+  try {
+    const mint = new CashuMint(tokenMintUrl);
+    const wallet = new CashuWallet(mint);
+    await wallet.initKeys();
+    const receiveResult = await wallet.receive(decoded);
+    const newProofs = receiveResult.token.token.flatMap((entry) => entry.proofs);
+    const amount = newProofs.reduce((s, p) => s + (p.amount || 0), 0);
+    cd.proofs = [...(cd.proofs || []), ...newProofs];
+    if (!cd.mintUrl) cd.mintUrl = tokenMintUrl;
+    recordSecrets(incomingProofs);
+    addCashuHistory({ direction: "Received", amount, unit: "sats", peer: "Cashu token", status: "Confirmed", mintUrl: tokenMintUrl });
+    persistActiveCashu();
+    return { amount, balance: getCashuBalance(), mintUrl: tokenMintUrl };
+  } catch (onlineErr) {
+    // Offline fallback: accept the raw proofs without mint verification.
+    // The proofs are stored as-is and should be swapped at mint when connectivity returns.
+    // Risk: sender could double-spend the same token; acceptable for trusted mesh peers.
+    console.warn("[cashu] Online receive failed, accepting proofs offline:", onlineErr.message);
+    if (!incomingProofs.length) throw new Error("Token contains no proofs");
+    const amount = incomingProofs.reduce((s, p) => s + (p.amount || 0), 0);
+    // Store separately so we know these need to be swapped at the mint later
+    cd.pendingSwapProofs = [...(cd.pendingSwapProofs || []), ...incomingProofs];
+    if (!cd.mintUrl) cd.mintUrl = tokenMintUrl;
+    recordSecrets(incomingProofs);
+    addCashuHistory({ direction: "Received", amount, unit: "sats", peer: "Cashu token (pending — will confirm when online)", status: "Pending", mintUrl: tokenMintUrl });
+    persistActiveCashu();
+    return { amount, balance: getCashuBalance(), pendingBalance: getCashuPendingBalance(), mintUrl: tokenMintUrl, unverified: true };
+  }
+}
+
+// Swap offline-received (pending) proofs at the mint to get fresh verified ones.
+// Called automatically when internet is available.
+async function cashuSwapPending() {
+  const cd = getActiveCashuData();
+  const pending = cd.pendingSwapProofs || [];
+  if (!pending.length) return { swapped: 0, pendingBalance: 0 };
+  if (!cd.mintUrl) throw new Error("No mint configured");
+
+  const { CashuMint, CashuWallet, getEncodedToken } = require("@cashu/cashu-ts");
+  const mint = new CashuMint(cd.mintUrl);
   const wallet = new CashuWallet(mint);
   await wallet.initKeys();
-  const receiveResult = await wallet.receive(decoded);
-  const newProofs = receiveResult.token.token.flatMap((entry) => entry.proofs);
-  const amount = newProofs.reduce((s, p) => s + (p.amount || 0), 0);
-  const cd = getActiveCashuData();
-  cd.proofs = [...(cd.proofs || []), ...newProofs];
-  if (!cd.mintUrl) cd.mintUrl = tokenMintUrl;
-  addCashuHistory({ direction: "Received", amount, unit: "sats", peer: "Cashu token", status: "Confirmed", mintUrl: tokenMintUrl });
+
+  // Re-encode pending proofs as a token and receive them (= swap at mint)
+  const tokenObj = { token: [{ mint: cd.mintUrl, proofs: pending }] };
+  const receiveResult = await wallet.receive(tokenObj);
+  const freshProofs = receiveResult.token.token.flatMap((e) => e.proofs);
+  const amount = freshProofs.reduce((s, p) => s + (p.amount || 0), 0);
+
+  cd.proofs = [...(cd.proofs || []), ...freshProofs];
+  cd.pendingSwapProofs = [];
+  addCashuHistory({ direction: "Confirmed", amount, unit: "sats", peer: "Pending proofs verified", status: "Confirmed" });
   persistActiveCashu();
-  return { amount, balance: getCashuBalance(), mintUrl: tokenMintUrl };
+  return { swapped: amount, balance: getCashuBalance(), pendingBalance: 0 };
 }
 
 function detectInvoiceNetwork(pr) {
@@ -3148,6 +3256,15 @@ const server = http.createServer(async (req, res) => {
       if (!token) return sendJson(res, 400, { error: "token required" });
       try {
         const result = await cashuReceiveToken(token);
+        return sendJson(res, 200, result);
+      } catch (e) {
+        return sendJson(res, 400, { error: e.message });
+      }
+    }
+
+    if (req.method === "POST" && req.url === "/api/cashu/swap-pending") {
+      try {
+        const result = await cashuSwapPending();
         return sendJson(res, 200, result);
       } catch (e) {
         return sendJson(res, 400, { error: e.message });
