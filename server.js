@@ -379,6 +379,38 @@ function persistActiveCashu() {
   }
 }
 
+const _cashuOpLocks = new Map();
+
+function getCashuLockKey() {
+  return isTestMode() ? "test" : "prod";
+}
+
+async function withCashuLock(fn) {
+  const key = getCashuLockKey();
+  const previous = _cashuOpLocks.get(key) || Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => { release = resolve; });
+  const queued = previous.finally(() => current);
+  _cashuOpLocks.set(key, queued);
+  await previous;
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (_cashuOpLocks.get(key) === queued) {
+      _cashuOpLocks.delete(key);
+    }
+  }
+}
+
+function normalizeCashuError(error) {
+  const message = String(error?.message || error || "Cashu operation failed");
+  if (message.toLowerCase().includes("token already spent")) {
+    return "Cashu proofs were already spent. This usually means the same send/payment was submitted twice or the local wallet state is stale.";
+  }
+  return message;
+}
+
 function persistWallet() {
   if (walletData) {
     fs.writeFileSync(WALLET_FILE, JSON.stringify(walletData, null, 2), "utf8");
@@ -727,6 +759,27 @@ async function cashuGetWallet() {
   _cashuWalletCache.set(key, result);
   return result;
 }
+
+async function cashuPruneSpentProofs() {
+  const cd = getActiveCashuData();
+  if (!cd.mintUrl || !(cd.proofs || []).length) return { removedCount: 0, removedAmount: 0 };
+  const { wallet } = await cashuGetWallet();
+  const spentProofs = await wallet.checkProofsSpent(cd.proofs);
+  if (!spentProofs.length) return { removedCount: 0, removedAmount: 0 };
+
+  const spentSecrets = new Set(spentProofs.map((p) => p.secret));
+  cd.proofs = cd.proofs.filter((p) => !spentSecrets.has(p.secret));
+  const removedAmount = spentProofs.reduce((sum, p) => sum + (p.amount || 0), 0);
+  addCashuHistory({
+    direction: "Reconciled",
+    amount: removedAmount,
+    unit: "sats",
+    peer: "Spent proofs removed",
+    status: "Cleaned",
+  });
+  persistActiveCashu();
+  return { removedCount: spentProofs.length, removedAmount };
+}
 function cashuInvalidateWalletCache() {
   _cashuWalletCache.clear();
 }
@@ -807,8 +860,11 @@ function selectProofsExact(amount, proofs) {
 
 async function cashuSendToken(amount) {
   const { getEncodedToken } = require("@cashu/cashu-ts");
-  if (getCashuBalance() < amount) throw new Error(`Insufficient balance (have ${getCashuBalance()} sats)`);
   const cd = getActiveCashuData();
+
+  // Best-effort: skip if mint is unreachable (offline mode).
+  try { await cashuPruneSpentProofs(); } catch (_) { /* no internet — continue offline */ }
+  if (getCashuBalance() < amount) throw new Error(`Insufficient balance (have ${getCashuBalance()} sats)`);
 
   // Try offline-first: select proofs without contacting the mint.
   // Works when available denominations can exactly represent the amount.
@@ -866,8 +922,15 @@ async function cashuReceiveToken(tokenString) {
     const wallet = new CashuWallet(mint);
     await wallet.initKeys();
     const receiveResult = await wallet.receive(decoded);
+    const receiveErrors = receiveResult.tokensWithErrors?.token || [];
+    if (receiveErrors.length || !receiveResult.token?.token?.length) {
+      throw new Error("Token was already spent or could not be reissued by the mint");
+    }
     const newProofs = receiveResult.token.token.flatMap((entry) => entry.proofs);
     const amount = newProofs.reduce((s, p) => s + (p.amount || 0), 0);
+    if (!amount || !newProofs.length) {
+      throw new Error("Token was already spent or returned no fresh proofs");
+    }
     cd.proofs = [...(cd.proofs || []), ...newProofs];
     if (!cd.mintUrl) cd.mintUrl = tokenMintUrl;
     recordSecrets(incomingProofs);
@@ -907,6 +970,10 @@ async function cashuSwapPending() {
   // Re-encode pending proofs as a token and receive them (= swap at mint)
   const tokenObj = { token: [{ mint: cd.mintUrl, proofs: pending }] };
   const receiveResult = await wallet.receive(tokenObj);
+  const receiveErrors = receiveResult.tokensWithErrors?.token || [];
+  if (receiveErrors.length || !receiveResult.token?.token?.length) {
+    throw new Error("Pending proofs were already spent or could not be reissued by the mint");
+  }
   const freshProofs = receiveResult.token.token.flatMap((e) => e.proofs);
   const amount = freshProofs.reduce((s, p) => s + (p.amount || 0), 0);
 
@@ -936,6 +1003,8 @@ async function cashuMeltToLightning(pr) {
   const { wallet } = await cashuGetWallet();
   const { getDecodedLnInvoice } = require("@cashu/cashu-ts");
   const cd = getActiveCashuData();
+
+  await cashuPruneSpentProofs();
 
   // Validate invoice network against the mint's network before contacting it
   const invoiceNet = detectInvoiceNetwork(pr);
@@ -3229,10 +3298,10 @@ const server = http.createServer(async (req, res) => {
       const hash = String(body.hash || "").trim();
       if (!hash) return sendJson(res, 400, { error: "hash required" });
       try {
-        const result = await cashuCheckInvoice(hash);
+        const result = await withCashuLock(() => cashuCheckInvoice(hash));
         return sendJson(res, 200, result);
       } catch (e) {
-        return sendJson(res, 402, { error: e.message });
+        return sendJson(res, 402, { error: normalizeCashuError(e) });
       }
     }
 
@@ -3241,12 +3310,12 @@ const server = http.createServer(async (req, res) => {
       const amount = Number(body.amount);
       if (!amount || amount <= 0) return sendJson(res, 400, { error: "amount required" });
       try {
-        const result = await cashuSendToken(amount);
+        const result = await withCashuLock(() => cashuSendToken(amount));
         addCashuHistory({ direction: "Sent", amount, unit: "sats", peer: body.peer || "Cashu token", status: "Token created" });
         persistActiveCashu();
         return sendJson(res, 200, result);
       } catch (e) {
-        return sendJson(res, 400, { error: e.message });
+        return sendJson(res, 400, { error: normalizeCashuError(e) });
       }
     }
 
@@ -3255,19 +3324,19 @@ const server = http.createServer(async (req, res) => {
       const token = String(body.token || "").trim();
       if (!token) return sendJson(res, 400, { error: "token required" });
       try {
-        const result = await cashuReceiveToken(token);
+        const result = await withCashuLock(() => cashuReceiveToken(token));
         return sendJson(res, 200, result);
       } catch (e) {
-        return sendJson(res, 400, { error: e.message });
+        return sendJson(res, 400, { error: normalizeCashuError(e) });
       }
     }
 
     if (req.method === "POST" && req.url === "/api/cashu/swap-pending") {
       try {
-        const result = await cashuSwapPending();
+        const result = await withCashuLock(() => cashuSwapPending());
         return sendJson(res, 200, result);
       } catch (e) {
-        return sendJson(res, 400, { error: e.message });
+        return sendJson(res, 400, { error: normalizeCashuError(e) });
       }
     }
 
@@ -3276,10 +3345,10 @@ const server = http.createServer(async (req, res) => {
       const pr = String(body.pr || "").trim();
       if (!pr) return sendJson(res, 400, { error: "Lightning invoice (pr) required" });
       try {
-        const result = await cashuMeltToLightning(pr);
+        const result = await withCashuLock(() => cashuMeltToLightning(pr));
         return sendJson(res, 200, result);
       } catch (e) {
-        return sendJson(res, 400, { error: e.message });
+        return sendJson(res, 400, { error: normalizeCashuError(e) });
       }
     }
 

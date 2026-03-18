@@ -2360,8 +2360,10 @@ walletSendForm.addEventListener("submit", async (event) => {
   const recipient = walletRecipientInput.value.trim();
   const transport = walletTransportSelect.value;
   const memo = walletMemoInput.value.trim();
+  const submitBtn = walletSendForm.querySelector("button[type=submit]");
   if (!amount || amount <= 0) { walletSendStatus.textContent = "Enter amount."; return; }
   walletSendStatus.textContent = "Preparing token...";
+  if (submitBtn) submitBtn.disabled = true;
   try {
     const data = await fetchJson("/api/cashu/send", {
       method: "POST",
@@ -2390,6 +2392,8 @@ walletSendForm.addEventListener("submit", async (event) => {
     renderWalletHistory();
   } catch (e) {
     walletSendStatus.textContent = e.message;
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
   }
 });
 
@@ -2400,6 +2404,7 @@ cashuCopyTokenButton.addEventListener("click", async () => {
 cashuMeltForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const pr = cashuMeltInput.value.trim();
+  const submitBtn = cashuMeltForm.querySelector("button[type=submit]");
   if (!pr) { cashuMeltStatus.textContent = "Paste a Lightning invoice."; return; }
   const prLower = pr.toLowerCase();
   if (walletState.testMode && prLower.startsWith("lnbc")) {
@@ -2411,6 +2416,7 @@ cashuMeltForm.addEventListener("submit", async (event) => {
     return;
   }
   cashuMeltStatus.textContent = "Paying...";
+  if (submitBtn) submitBtn.disabled = true;
   try {
     const data = await fetchJson("/api/cashu/melt", { method: "POST", body: JSON.stringify({ pr }) });
     cashuState.balance = data.balance;
@@ -2419,6 +2425,8 @@ cashuMeltForm.addEventListener("submit", async (event) => {
     applyCashuState();
   } catch (e) {
     cashuMeltStatus.textContent = e.message;
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
   }
 });
 
@@ -2685,8 +2693,10 @@ if (swapCashuSendForm) {
     event.preventDefault();
     const amount = Number(swapCashuSendAmount?.value);
     const recipient = (swapCashuSendRecipient?.value || "").trim();
+    const btn = swapCashuSendForm.querySelector("button[type=submit]");
     if (!amount || amount <= 0) { if (swapCashuSendStatus) swapCashuSendStatus.textContent = "Enter amount."; return; }
     if (swapCashuSendStatus) swapCashuSendStatus.textContent = "Creating token...";
+    if (btn) btn.disabled = true;
     try {
       const data = await fetchJson("/api/cashu/send", { method: "POST", body: JSON.stringify({ amount, peer: recipient || "manual", memo: "" }) });
       cashuState.balance = Math.max(0, cashuState.balance - amount);
@@ -2707,6 +2717,8 @@ if (swapCashuSendForm) {
       renderWalletHistory();
     } catch (e) {
       if (swapCashuSendStatus) swapCashuSendStatus.textContent = e.message;
+    } finally {
+      if (btn) btn.disabled = false;
     }
   });
 }
