@@ -844,6 +844,26 @@
               </div>
             </div>
 
+            <div class="modal-section wallet-section">
+              <div class="modal-label">Preferences</div>
+              <div class="wallet-form-grid" style="padding-top:4px">
+                <label class="wallet-field" for="walletPreferredUnitSelect">
+                  <span>Preferred unit</span>
+                  <select id="walletPreferredUnitSelect">
+                    <option value="sats">sats</option>
+                    <option value="BTC">BTC</option>
+                  </select>
+                </label>
+                <label class="wallet-field" for="walletDefaultTransportSelect">
+                  <span>Transport</span>
+                  <select id="walletDefaultTransportSelect">
+                    <option value="Meshtastic DM">Meshtastic DM</option>
+                    <option value="Gateway relay">Gateway relay</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
             <div class="wallet-fund-card wallet-testmode-card">
               <div class="wallet-testmode-row">
                 <div>
@@ -895,25 +915,6 @@
               <div class="modal-section wallet-section">
                 <div class="modal-label">Wallet info</div>
                 <div id="walletInfoKv" class="wallet-kv-block"></div>
-              </div>
-              <div class="modal-section wallet-section" style="margin-top:4px">
-                <div class="modal-label">Preferences</div>
-                <div class="wallet-form-grid" style="padding-top:4px">
-                  <label class="wallet-field" for="walletPreferredUnitSelect">
-                    <span>Preferred unit</span>
-                    <select id="walletPreferredUnitSelect">
-                      <option value="sats">sats</option>
-                      <option value="BTC">BTC</option>
-                    </select>
-                  </label>
-                  <label class="wallet-field" for="walletDefaultTransportSelect">
-                    <span>Transport</span>
-                    <select id="walletDefaultTransportSelect">
-                      <option value="Meshtastic DM">Meshtastic DM</option>
-                      <option value="Gateway relay">Gateway relay</option>
-                    </select>
-                  </label>
-                </div>
               </div>
               <div class="modal-section wallet-section" style="margin-top:4px">
                 <div class="wallet-seed-header">
