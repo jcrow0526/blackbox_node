@@ -214,6 +214,7 @@ body {
   gap: 10px;
   min-width: 0;
   grid-column: 1;
+  width: 100%;
 }
 
 .chat-title-main {
@@ -3386,4 +3387,50 @@ textarea,
 .device-meta-form button {
   width: 100%;
   margin-top: 4px;
+}
+
+/* AI reply toggle row */
+.ai-reply-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.ai-reply-label {
+  font-size: 9px;
+  font-family: "Press Start Local", monospace;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ai-reply-btn {
+  font-size: 9px;
+  font-family: "Press Start Local", monospace;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-top: 2px solid var(--edge-light);
+  border-left: 2px solid var(--edge-light);
+  border-right: 2px solid var(--edge-dark);
+  border-bottom: 2px solid var(--edge-dark);
+  background: #1f2226;
+  color: var(--muted);
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: color 0.15s, background 0.15s;
+}
+
+.ai-reply-btn:hover {
+  color: var(--ink);
+}
+
+.ai-reply-btn--on {
+  background: #1a2e1a;
+  color: #4caf50;
+  border-top-color: var(--edge-dark);
+  border-left-color: var(--edge-dark);
+  border-right-color: var(--edge-light);
+  border-bottom-color: var(--edge-light);
 }

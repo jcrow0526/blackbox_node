@@ -186,6 +186,7 @@ const swapLnCheckStatus = document.getElementById("swapLnCheckStatus");
 const activeSwapsCard = document.getElementById("activeSwapsCard");
 const activeSwapsList = document.getElementById("activeSwapsList");
 const clearSwapsButton = document.getElementById("clearSwapsButton");
+const meshAiReplyToggle = document.getElementById("meshAiReplyToggle");
 const deviceMetaModal = document.getElementById("deviceMetaModal");
 const deviceMetaClose = document.getElementById("deviceMetaClose");
 const deviceMetaShortName = document.getElementById("deviceMetaShortName");
@@ -1225,6 +1226,12 @@ function closeHelpModal() {
   renderHelpView();
   helpModal.classList.add("hidden");
   helpModal.setAttribute("aria-hidden", "true");
+}
+
+function applyMeshAiReply(enabled) {
+  meshAiReplyToggle.textContent = enabled ? "on" : "off";
+  meshAiReplyToggle.setAttribute("aria-pressed", String(enabled));
+  meshAiReplyToggle.classList.toggle("ai-reply-btn--on", enabled);
 }
 
 function openDeviceMetaModal() {
@@ -2690,6 +2697,9 @@ function renderDeviceStatus(status) {
 
   deviceStatus.style.cursor = connected ? "pointer" : "";
   latestMeshtasticConnected = connected;
+  if (typeof status.meshAiReply === "boolean") {
+    applyMeshAiReply(status.meshAiReply);
+  }
   if (typeof status.walletTestMode === "boolean") {
     walletState.testMode = status.walletTestMode;
   }
@@ -3716,6 +3726,12 @@ helpModalClose.addEventListener("click", closeHelpModal);
 walletModalClose.addEventListener("click", closeWalletModal);
 deviceStatus.addEventListener("click", () => {
   if (latestMeshtasticConnected) openDeviceMetaModal();
+});
+meshAiReplyToggle.addEventListener("click", () => {
+  const next = meshAiReplyToggle.getAttribute("aria-pressed") !== "true";
+  fetchJson("/api/mesh-ai-reply", { method: "POST", body: JSON.stringify({ enabled: next }) })
+    .then((data) => applyMeshAiReply(data.meshAiReply))
+    .catch(() => {});
 });
 deviceMetaClose.addEventListener("click", closeDeviceMetaModal);
 deviceMetaModal.addEventListener("click", (event) => {

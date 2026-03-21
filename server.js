@@ -367,6 +367,10 @@ function isTestMode() {
   return Boolean(appSettings.walletTestMode);
 }
 
+function isMeshAiReplyEnabled() {
+  return Boolean(appSettings.meshAiReply);
+}
+
 function getActiveWalletData() {
   return isTestMode() ? testWalletData : walletData;
 }
@@ -2511,6 +2515,22 @@ function isCashuMeshText(text) {
   return /^(\[\d+\s*sats?\]\s*)?(cashu[AB]\S+)/i.test(normalized);
 }
 
+function sanitizeMeshReply(text) {
+  let s = String(text || "").trim();
+  s = s
+    .replace(/<\|im_start\|>[\s\S]*/i, "")
+    .replace(/<\|im_end\|>[\s\S]*/i, "")
+    .replace(/<\|eot_id\|>[\s\S]*/i, "")
+    .replace(/<\|start_header_id\|>[\s\S]*/i, "")
+    .replace(/\[\/INST\][\s\S]*/i, "")
+    .replace(/<\/s>[\s\S]*/i, "")
+    .replace(/<\|end\|>[\s\S]*/i, "")
+    .replace(/<\|[^|>]{1,30}\|>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return s || "No response.";
+}
+
 async function generateMeshReply(peerId, prompt) {
   const history = getHistory(peerId);
   const aiSettings = getAiSettingsPayload();
@@ -2520,16 +2540,14 @@ async function generateMeshReply(peerId, prompt) {
     body: JSON.stringify({
       model: currentModelName,
       messages: [
-        {
-          role: "system",
-          content: buildMeshSystemPrompt(aiSettings),
-        },
+        { role: "system", content: buildMeshSystemPrompt(aiSettings) },
         ...history,
         { role: "user", content: prompt },
       ],
       temperature: aiSettings.meshTemperature,
       top_p: aiSettings.meshTopP,
       max_tokens: aiSettings.meshMaxTokens,
+      stop: ["<|im_end|>", "<|im_start|>", "<|eot_id|>", "<|start_header_id|>", "[/INST]", "<<SYS>>", "</s>", "<|end|>"],
       stream: false,
     }),
   });
@@ -2538,10 +2556,10 @@ async function generateMeshReply(peerId, prompt) {
     throw new Error(`LLM HTTP ${response.status}`);
   }
 
-  const payload = await response.json();
-  const reply = String(payload.choices?.[0]?.message?.content || "No response.").replace(/\s+/g, " ").trim();
+  const data = await response.json();
+  const reply = sanitizeMeshReply(data.choices?.[0]?.message?.content || "");
   saveHistory(peerId, [...history, { role: "user", content: prompt }, { role: "assistant", content: reply }]);
-  return reply || "No response.";
+  return reply;
 }
 
 function sleep(ms) {
@@ -2636,6 +2654,10 @@ async function handleInboundMesh(payload) {
     return;
   }
 
+  if (!isMeshAiReplyEnabled()) {
+    return;
+  }
+
   if (String(repairedText || "").trim().toLowerCase() === "!reset") {
     sessions.delete(payload.sender);
     const resetText = "Context reset.";
@@ -2643,23 +2665,7 @@ async function handleInboundMesh(payload) {
     return;
   }
 
-  const prompt = isBotCommand(repairedText)
-    ? normalizePrompt(repairedText)
-    : String(repairedText || "").trim();
-
-  if (isNodesQuery(prompt)) {
-    await sendMeshReply(payload.sender, listKnownNodesText());
-    return;
-  }
-
-  if (isWeatherQuery(prompt)) {
-    const weatherNode = getBestWeatherNode();
-    const weatherText = weatherNode
-      ? buildWeatherSummary(weatherNode)
-      : "No weather metadata found in known nodes.";
-    await sendMeshReply(payload.sender, weatherText);
-    return;
-  }
+  const prompt = String(repairedText || "").trim();
 
   const reply = await generateMeshReply(payload.sender, prompt);
   await sendMeshReply(payload.sender, reply);
@@ -3182,7 +3188,16 @@ const server = http.createServer(async (req, res) => {
         meshtastic: getMeshtasticStatusPayload(),
         llm: { ...llmStatus, health, availableModels: listAvailableModels(), currentModel: currentModelName },
         walletTestMode: isTestMode(),
+        meshAiReply: isMeshAiReplyEnabled(),
       });
+    }
+
+    if (req.method === "POST" && req.url === "/api/mesh-ai-reply") {
+      const body = await readJson(req);
+      appSettings.meshAiReply = Boolean(body.enabled);
+      persistSettings();
+      broadcast("status", { meshAiReply: appSettings.meshAiReply });
+      return sendJson(res, 200, { ok: true, meshAiReply: appSettings.meshAiReply });
     }
 
     if (req.method === "GET" && req.url === "/api/meshtastic/ports") {
