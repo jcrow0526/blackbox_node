@@ -1363,6 +1363,23 @@ button {
   margin: 4px 0;
 }
 
+/* Animated hover link lines (Leaflet SVG path elements) */
+.map-link-hover-flow {
+  stroke-dasharray: 10 7;
+  animation:
+    map-link-fade-in 0.25s ease-out forwards,
+    map-link-flow 1.4s linear 0.25s infinite;
+}
+
+@keyframes map-link-fade-in {
+  from { stroke-opacity: 0; }
+  to   { stroke-opacity: var(--link-opacity, 0.8); }
+}
+
+@keyframes map-link-flow {
+  to { stroke-dashoffset: -34; }
+}
+
 .nodes-map-role-legend {
   pointer-events: auto;
   min-width: 110px;

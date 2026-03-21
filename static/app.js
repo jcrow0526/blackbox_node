@@ -2261,6 +2261,11 @@ function _renderMapNodes(fitBounds = true) {
               [[fromPos.lat, fromPos.lon], [toPos.lat, toPos.lon]],
               { color, weight, opacity, interactive: false }
             ).addTo(_mapInstance);
+            const el = line.getElement();
+            if (el) {
+              el.style.setProperty("--link-opacity", String(opacity));
+              el.classList.add("map-link-hover-flow");
+            }
             _hoverLines.push(line);
           }
           // queue neighbors of `to` for next hop
