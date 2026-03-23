@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const zlib = require("zlib");
 const { spawnSync, spawn } = require("child_process");
 
 const HOST = "127.0.0.1";
@@ -9,6 +10,7 @@ const parsedPort = Number.parseInt(process.env.PORT || "", 10);
 const PORT = Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : DEFAULT_PORT;
 const STATIC_DIR = path.join(__dirname, "static");
 const DATA_DIR = path.join(__dirname, "data");
+const TAK_CAPTURE_DIR = path.join(DATA_DIR, "tak_capture");
 const DB_FILE = path.join(DATA_DIR, "messages.json");
 const NODES_FILE = path.join(DATA_DIR, "nodes.json");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
@@ -216,6 +218,7 @@ const MIN_VALID_MODEL_BYTES = 1024 * 1024;
 
 const sessions = new Map();
 const clients = new Set();
+const latestTakFeatures = new Map(); // uid -> feature
 let nodesRefreshInterval = null;
 let messages = [];
 let knownNodes = {};
@@ -250,6 +253,7 @@ let modelManagerOperation = {
 let modelDownloadAbortController = null;
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
+fs.mkdirSync(TAK_CAPTURE_DIR, { recursive: true });
 if (fs.existsSync(DB_FILE)) {
   try {
     messages = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
@@ -325,6 +329,28 @@ function getConfiguredMeshtasticPort() {
     : "";
 }
 
+function getConfiguredTakChannel() {
+  const value = Number.parseInt(String(appSettings.takMeshtasticChannel ?? "0"), 10);
+  return Number.isInteger(value) && value >= 0 && value <= 7 ? value : 0;
+}
+
+function setConfiguredTakChannel(channel) {
+  const value = Number.parseInt(String(channel ?? "0"), 10);
+  appSettings.takMeshtasticChannel = Number.isInteger(value) && value >= 0 && value <= 7 ? value : 0;
+  persistSettings();
+}
+
+function getConfiguredTakHopLimit() {
+  const value = Number.parseInt(String(appSettings.takHopLimit ?? "3"), 10);
+  return Number.isInteger(value) && value >= 0 && value <= 7 ? value : 3;
+}
+
+function setConfiguredTakHopLimit(hopLimit) {
+  const value = Number.parseInt(String(hopLimit ?? "3"), 10);
+  appSettings.takHopLimit = Number.isInteger(value) && value >= 0 && value <= 7 ? value : 3;
+  persistSettings();
+}
+
 function setConfiguredMeshtasticPort(port) {
   const value = String(port || "").trim();
   if (value) {
@@ -339,6 +365,8 @@ function getMeshtasticStatusPayload(overrides = {}) {
   return {
     ...meshtasticStatus,
     selectedPort: getConfiguredMeshtasticPort() || null,
+    takChannel: getConfiguredTakChannel(),
+    takHopLimit: getConfiguredTakHopLimit(),
     ...overrides,
   };
 }
@@ -1804,6 +1832,417 @@ function broadcast(type, payload) {
   }
 }
 
+// ── TAK / CoT helpers ─────────────────────────────────────────────────────────
+function _hexToArgbInt(hex) {
+  try {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const v = ((0xFF << 24) | (r << 16) | (g << 8) | b) >>> 0;
+    return v > 0x7FFFFFFF ? v - 0x100000000 : v;
+  } catch { return -16711936; }
+}
+function _argbIntToHexColor(value, fallback = "#4a9eff") {
+  try {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    const unsigned = (n >>> 0);
+    const r = ((unsigned >> 16) & 0xFF).toString(16).padStart(2, "0");
+    const g = ((unsigned >> 8) & 0xFF).toString(16).padStart(2, "0");
+    const b = (unsigned & 0xFF).toString(16).padStart(2, "0");
+    return `#${r}${g}${b}`;
+  } catch {
+    return fallback;
+  }
+}
+function _hexToAlphaArgbInt(hex, alpha = 0x7f) {
+  try {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const a = Math.max(0, Math.min(255, Number(alpha) || 0));
+    const v = ((a << 24) | (r << 16) | (g << 8) | b) >>> 0;
+    return v > 0x7FFFFFFF ? v - 0x100000000 : v;
+  } catch { return 2147418112; }
+}
+function _cotNow() { return new Date().toISOString().replace(/\.\d{3}Z$/, "Z"); }
+function _cotStale() { return new Date(Date.now() + 2 * 60000).toISOString().replace(/\.\d{3}Z$/, "Z"); }
+function _cotPast(ms = 1000) { return new Date(Date.now() - ms).toISOString().replace(/\.\d{3}Z$/, "Z"); }
+function _xmlEsc(s) { return String(s || "").replace(/[<>&"]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c])); }
+function _cotDoc(eventXml) { return `<?xml version='1.0' encoding='UTF-8' standalone='yes'?>${eventXml}`; }
+function _cotPrecisionLocation(tagName = "precisionLocation", geopointsrc = "???") {
+  return `<${tagName} geopointsrc="${geopointsrc}" altsrc="???"></${tagName}>`;
+}
+function _cotMarti() { return `<marti></marti>`; }
+function _cotGeofence() {
+  return `<__geofence elevationMonitored="false" tracking="false" monitor="All" trigger="Both" maxElevation="NaN" minElevation="NaN"></__geofence>`;
+}
+function _cotRemarks(remarks = "") {
+  const text = String(remarks || "").trim();
+  return text ? `<remarks>${_xmlEsc(text)}</remarks>` : "";
+}
+function _hexToTakColorHex(color = "#4a9eff", alpha = 0xff) {
+  try {
+    const clean = String(color).trim().replace(/^#/, "");
+    const hex = clean.length === 3
+      ? clean.split("").map(ch => ch + ch).join("")
+      : clean.slice(0, 6);
+    const a = Math.max(0, Math.min(255, Number(alpha) || 0)).toString(16).padStart(2, "0").toUpperCase();
+    return `${a}${hex.toUpperCase()}`;
+  } catch {
+    return alpha >= 0xff ? "FF4A9EFF" : "7F4A9EFF";
+  }
+}
+function _cotKmlStyleLink(uid, color = "#4a9eff", fillColor = null, strokeWeight = 1) {
+  return `<link type="b-x-KmlStyle" relation="p-c" uid="${uid}.style"><Style><LineStyle><color>${_hexToTakColorHex(color, 0xff)}</color><width>${Math.max(1, Number(strokeWeight) || 1)}</width></LineStyle><PolyStyle><color>${_hexToTakColorHex(fillColor || color, 0x7f)}</color></PolyStyle></Style></link>`;
+}
+
+function _fmtCoord(n) { return parseFloat(n.toFixed(6)); }
+function _fmtMeters(n) { return Number.parseFloat(String(n || 0)); }
+function _closeRing(points) {
+  const list = Array.isArray(points) ? points.slice() : [];
+  if (list.length < 3) return list;
+  const first = list[0];
+  const last = list[list.length - 1];
+  if (!first || !last) return list;
+  if (Math.abs(first[0] - last[0]) > 1e-7 || Math.abs(first[1] - last[1]) > 1e-7) {
+    list.push(first);
+  }
+  return list;
+}
+function _latLngOffsetMeters(center, eastMeters, northMeters) {
+  const lat = Number(center?.[0] || 0);
+  const lon = Number(center?.[1] || 0);
+  const mPerDegLat = 111320;
+  const mPerDegLon = Math.max(1, 111320 * Math.cos(lat * Math.PI / 180));
+  return [lat + (northMeters / mPerDegLat), lon + (eastMeters / mPerDegLon)];
+}
+function rectangleToLatLngs(center, lengthMeters, widthMeters, angleDeg = 0) {
+  if (!Array.isArray(center) || center.length < 2) return [];
+  const halfL = Number(lengthMeters || 0) / 2;
+  const halfW = Number(widthMeters || 0) / 2;
+  if (!(halfL > 0) || !(halfW > 0)) return [];
+  const angle = (Number(angleDeg) || 0) * Math.PI / 180;
+  const corners = [
+    [-halfW, -halfL],
+    [ halfW, -halfL],
+    [ halfW,  halfL],
+    [-halfW,  halfL],
+  ];
+  return corners.map(([x, y]) => {
+    const east = x * Math.cos(angle) - y * Math.sin(angle);
+    const north = x * Math.sin(angle) + y * Math.cos(angle);
+    return _latLngOffsetMeters(center, east, north);
+  });
+}
+function _cotShapeDetail({ uid, label, color, fillColor, strokeWeight, strokeStyle, remarks = "", shapeXml, extraDetailXml = "", includeRemarks = true, includeGeofence = true }) {
+  const escaped = _xmlEsc(label || "");
+  const strokeArgb = _hexToArgbInt(color || "#4a9eff");
+  const fillArgb = _hexToAlphaArgbInt(fillColor || color || "#4a9eff", 0x7f);
+  const width = Math.max(1, Number(strokeWeight) || 1);
+  const style = _xmlEsc(String(strokeStyle || "solid"));
+  return `<detail><contact endpoint="0.0.0.0:4242:tcp" callsign="${escaped || uid}"/><uid Droid="${escaped || uid}"/>${_cotPrecisionLocation("precisionLocation")}<strokeColor value="${strokeArgb}"/><fillColor value="${fillArgb}"/><strokeWeight value="${width}"/><strokeStyle value="${style}"/>${extraDetailXml}${_cotMarti()}${shapeXml}${includeGeofence ? _cotGeofence() : ""}${includeRemarks ? _cotRemarks(remarks || escaped) : ""}</detail>`;
+}
+
+function compressCotXml(xml) {
+  return zlib.deflateSync(Buffer.from(String(xml || ""), "utf8"), { level: 9 });
+}
+
+function reduceTakGeometryPoints(type, points, targetCount) {
+  if (!Array.isArray(points) || points.length === 0) return [];
+  const minPoints = type === "polygon" ? 3 : 2;
+  if (points.length <= targetCount || targetCount < minPoints) {
+    return points.slice();
+  }
+
+  if (type === "polygon") {
+    const result = [];
+    for (let i = 0; i < targetCount; i += 1) {
+      const idx = Math.min(points.length - 1, Math.floor((i * points.length) / targetCount));
+      result.push(points[idx]);
+    }
+    while (result.length < minPoints) {
+      result.push(points[Math.min(points.length - 1, result.length)]);
+    }
+    return result;
+  }
+
+  const result = [points[0]];
+  const interior = targetCount - 2;
+  for (let i = 1; i <= interior; i += 1) {
+    const idx = Math.min(points.length - 2, Math.floor((i * (points.length - 2)) / (interior + 1)) + 1);
+    result.push(points[idx]);
+  }
+  result.push(points[points.length - 1]);
+  return result;
+}
+
+function getTakFeatureCenter(feature) {
+  if (Array.isArray(feature.latlng) && feature.latlng.length >= 2) {
+    return [_fmtCoord(feature.latlng[0]), _fmtCoord(feature.latlng[1])];
+  }
+  if (Array.isArray(feature.latlngs) && feature.latlngs.length > 0) {
+    const lat = feature.latlngs.reduce((sum, point) => sum + point[0], 0) / feature.latlngs.length;
+    const lon = feature.latlngs.reduce((sum, point) => sum + point[1], 0) / feature.latlngs.length;
+    return [_fmtCoord(lat), _fmtCoord(lon)];
+  }
+  return null;
+}
+
+function featureToCot({ uid, type, latlng, latlngs, label, color, fillColor, strokeWeight, strokeStyle, remarks, cotType, iconsetPath, radiusMeters, rangeMeters, bearingDeg, majorMeters, minorMeters, angleDeg }) {
+  const now = _cotNow(), stale = _cotStale();
+  const argb = _hexToArgbInt(color || "#4a9eff");
+  const defaultLabel = type === "marker"
+    ? "WPT"
+    : type === "polyline"
+      ? "Route"
+      : type === "polygon"
+        ? "Shape"
+        : type === "circle"
+          ? "Circle"
+          : type === "ruler"
+            ? "Ruler"
+          : "Ellipse";
+  const name = _xmlEsc(label || defaultLabel);
+  const cotUid = String(uid || `tak-${Date.now()}`);
+  if (type === "marker" && latlng) {
+    const lat = _fmtCoord(latlng[0]), lon = _fmtCoord(latlng[1]);
+    const iconXml = iconsetPath ? `<usericon iconsetpath="${_xmlEsc(iconsetPath)}"/>` : "";
+    return _cotDoc(`<event version="2.0" uid="${cotUid}" type="${_xmlEsc(cotType || "b-m-p-w")}" time="${now}" start="${now}" stale="${stale}" how="h-e"><point lat="${lat}" lon="${lon}" hae="9999999.0" ce="9999999.0" le="9999999.0"/><detail><contact endpoint="0.0.0.0:4242:tcp" callsign="${name}"/><uid Droid="${name || cotUid}"/>${_cotPrecisionLocation("precisionLocation")}<color argb="${argb}"/>${iconXml}${_cotMarti()}${_cotRemarks(remarks)}<archive/></detail></event>`);
+  }
+  if (type === "polyline" && latlngs?.length >= 2) {
+    const cLat = _fmtCoord(latlngs.reduce((a, p) => a + p[0], 0) / latlngs.length);
+    const cLon = _fmtCoord(latlngs.reduce((a, p) => a + p[1], 0) / latlngs.length);
+    const verts = latlngs.map((p) => `<vertex lat="${_fmtCoord(p[0])}" lon="${_fmtCoord(p[1])}"/>`).join("");
+    return _cotDoc(`<event version="2.0" uid="${cotUid}" type="u-d-f" time="${now}" start="${now}" stale="${stale}" how="h-e"><point lat="${cLat}" lon="${cLon}" hae="9999999.0" ce="9999999.0" le="9999999.0"/>${_cotShapeDetail({ uid: cotUid, label: label || defaultLabel, color, fillColor: color, strokeWeight, strokeStyle, remarks, shapeXml: `<shape><lineString>${verts}</lineString>${_cotKmlStyleLink(cotUid, color, color, strokeWeight)}</shape>`, includeRemarks: true, includeGeofence: false })}</event>`);
+  }
+  if (type === "polygon" && latlngs?.length >= 3) {
+    const ring = _closeRing(latlngs);
+    const cLat = _fmtCoord(ring.reduce((a, p) => a + p[0], 0) / ring.length);
+    const cLon = _fmtCoord(ring.reduce((a, p) => a + p[1], 0) / ring.length);
+    const verts = ring.map(p => `<vertex lat="${_fmtCoord(p[0])}" lon="${_fmtCoord(p[1])}"/>`).join("");
+    return _cotDoc(`<event version="2.0" uid="${cotUid}" type="u-d-f" time="${now}" start="${now}" stale="${stale}" how="h-e"><point lat="${cLat}" lon="${cLon}" hae="9999999.0" ce="9999999.0" le="9999999.0"/>${_cotShapeDetail({ uid: cotUid, label: label || defaultLabel, color, fillColor, strokeWeight, strokeStyle, remarks, shapeXml: `<shape><polygon>${verts}</polygon>${_cotKmlStyleLink(cotUid, color, fillColor, strokeWeight)}</shape>`, includeRemarks: true })}</event>`);
+  }
+  if (type === "circle" && latlng && Number(radiusMeters) > 0) {
+    const lat = _fmtCoord(latlng[0]), lon = _fmtCoord(latlng[1]);
+    const r = _fmtMeters(radiusMeters);
+    return _cotDoc(`<event version="2.0" uid="${cotUid}" type="u-d-c-c" time="${now}" start="${now}" stale="${stale}" how="h-e"><point lat="${lat}" lon="${lon}" hae="9999999.0" ce="9999999.0" le="9999999.0"/>${_cotShapeDetail({ uid: cotUid, label: label || defaultLabel, color, fillColor, strokeWeight, strokeStyle, remarks, shapeXml: `<shape><ellipse major="${r}" angle="360.0" minor="${r}"></ellipse>${_cotKmlStyleLink(cotUid, color, fillColor, strokeWeight)}</shape>`, includeRemarks: true })}</event>`);
+  }
+  if (type === "ruler" && latlng && Number(rangeMeters) > 0) {
+    const lat = _fmtCoord(latlng[0]), lon = _fmtCoord(latlng[1]);
+    const range = _fmtMeters(rangeMeters);
+    const bearing = _fmtMeters(bearingDeg || 0);
+    return _cotDoc(`<event version="2.0" uid="${cotUid}" type="u-rb-a" time="${now}" start="${now}" stale="${stale}" how="h-e"><point lat="${lat}" lon="${lon}" hae="9999999.0" ce="9999999.0" le="9999999.0"/><detail><contact endpoint="0.0.0.0:4242:tcp" callsign="${name}"/><uid Droid="${name || cotUid}"/>${_cotRemarks(remarks)}${_cotPrecisionLocation("precisionLocation", "User")}<color value="${argb}"></color><range value="${range}"></range><rangeUnits value="1"></rangeUnits><bearing value="${bearing}"></bearing><bearingUnits value="0"></bearingUnits><inclination value="0.0"></inclination><northRef value="1"></northRef>${_cotMarti()}</detail></event>`);
+  }
+  if (type === "ellipse" && latlng && Number(majorMeters) > 0 && Number(minorMeters) > 0) {
+    const lat = _fmtCoord(latlng[0]), lon = _fmtCoord(latlng[1]);
+    const major = _fmtMeters(majorMeters);
+    const minor = _fmtMeters(minorMeters);
+    const angle = _fmtMeters(angleDeg || 0);
+    return _cotDoc(`<event version="2.0" uid="${cotUid}" type="u-d-c-e" time="${now}" start="${now}" stale="${stale}" how="h-e"><point lat="${lat}" lon="${lon}" hae="9999999.0" ce="9999999.0" le="9999999.0"/>${_cotShapeDetail({ uid: cotUid, label: label || defaultLabel, color, fillColor, strokeWeight, strokeStyle, remarks, shapeXml: `<shape><ellipse major="${major}" angle="${angle}" minor="${minor}"></ellipse>${_cotKmlStyleLink(cotUid, color, fillColor, strokeWeight)}</shape>`, includeRemarks: true })}</event>`);
+  }
+  return null;
+}
+
+function buildTakDeleteCot(feature = {}) {
+  const uid = String(feature.uid || "").trim();
+  if (!uid) return null;
+  const point = getTakFeatureCenter(feature) || [0, 0];
+  const now = _cotNow();
+  const stale = _cotPast(1000);
+  const rawType = String(feature.rawType || feature.cotType || (
+    feature.type === "marker" ? "b-m-p-w"
+      : feature.type === "circle" ? "u-d-c-c"
+      : feature.type === "ruler" ? "u-rb-a"
+      : "b-m-p-w"
+  ));
+  return _cotDoc(
+    `<event version="2.0" uid="${_xmlEsc(uid)}" type="${_xmlEsc(rawType)}" time="${now}" start="${now}" stale="${stale}" how="h-e">` +
+      `<point lat="${_fmtCoord(point[0])}" lon="${_fmtCoord(point[1])}" hae="9999999.0" ce="9999999.0" le="9999999.0"/>` +
+      `<detail><__forcedelete/></detail>` +
+    `</event>`
+  );
+}
+
+function buildTakCotForMesh(feature, maxPacketBytes = 233) {
+  const baseFeature = {
+    uid: feature.uid,
+    type: feature.type,
+    latlng: feature.latlng,
+    latlngs: Array.isArray(feature.latlngs) ? feature.latlngs.slice() : null,
+    radiusMeters: feature.radiusMeters ?? null,
+    rangeMeters: feature.rangeMeters ?? null,
+    bearingDeg: feature.bearingDeg ?? null,
+    majorMeters: feature.majorMeters ?? null,
+    minorMeters: feature.minorMeters ?? null,
+    angleDeg: feature.angleDeg ?? null,
+    label: feature.label || "",
+    color: feature.color || "#4a9eff",
+    fillColor: feature.fillColor || feature.color || "#4a9eff",
+    strokeWeight: feature.strokeWeight ?? 1,
+    strokeStyle: feature.strokeStyle || "solid",
+    remarks: feature.remarks || "",
+    cotType: feature.cotType || "",
+    iconsetPath: feature.iconsetPath || "",
+  };
+
+  const firstXml = featureToCot(baseFeature);
+  if (!firstXml) {
+    return { cotXml: null, error: "invalid feature type" };
+  }
+
+  const firstCompressed = compressCotXml(firstXml);
+  if (firstCompressed.length <= maxPacketBytes) {
+    return { cotXml: firstXml, simplified: false, compressedBytes: firstCompressed.length, transportHint: "direct" };
+  }
+
+  return {
+    cotXml: firstXml,
+    simplified: false,
+    compressedBytes: firstCompressed.length,
+    originalPoints: Array.isArray(baseFeature.latlngs) ? baseFeature.latlngs.length : null,
+    sentPoints: Array.isArray(baseFeature.latlngs) ? baseFeature.latlngs.length : null,
+    transportHint: "fountain",
+  };
+}
+
+function parseCotXml(xml) {
+  try {
+    const attr = (fragment, name) => fragment?.match(new RegExp(`\\b${name}=['"]([^'"]+)['"]`, "i"))?.[1] || "";
+    const uid = xml.match(/\buid=['"]([^'"]+)['"]/)?.[1] || "";
+    const type = xml.match(/\btype=['"]([^'"]+)['"]/)?.[1] || "";
+    const isForceDelete = /<__forcedelete\b/i.test(xml);
+    const staleValue = xml.match(/\bstale=['"]([^'"]+)['"]/)?.[1] || "";
+    const isStaleDelete = !!staleValue && !Number.isNaN(Date.parse(staleValue)) && Date.parse(staleValue) <= Date.now();
+    if (isForceDelete || isStaleDelete) {
+      return {
+        uid,
+        rawType: type,
+        cotType: type,
+        type: "delete",
+      };
+    }
+    const pm = xml.match(/<point[^>]+lat=['"]([^'"]+)['"][^>]+lon=['"]([^'"]+)['"]/);
+    const lat = pm ? parseFloat(pm[1]) : 0;
+    const lon = pm ? parseFloat(pm[2]) : 0;
+    const callsign = xml.match(/<contact[^>]+callsign=['"]([^'"]+)['"]/)?.[1] || "";
+    const remarks = xml.match(/<remarks>([^<]*)<\/remarks>/)?.[1] || "";
+    const label = callsign || remarks || "";
+    const iconsetPath = xml.match(/<usericon[^>]+iconsetpath=['"]([^'"]+)['"]/)?.[1] || "";
+    const vertexPoints = [...xml.matchAll(/<vertex[^>]+lat=['"]([^'"]+)['"][^>]+lon=['"]([^'"]+)['"]/g)]
+      .map(m => [parseFloat(m[1]), parseFloat(m[2])])
+      .filter(p => !isNaN(p[0]) && !isNaN(p[1]));
+    const linkPoints = [...xml.matchAll(/<link[^>]+point=['"]([^'"]+)['"]/g)]
+      .map(m => {
+        const p = m[1].split(",");
+        return [parseFloat(p[0]), parseFloat(p[1])];
+      })
+      .filter(p => !isNaN(p[0]) && !isNaN(p[1]));
+    const ellipseTag = xml.match(/<ellipse\b([^>]*)>/i)?.[1] || "";
+    const rectangleTag = xml.match(/<rectangle\b([^>]*)>/i)?.[1] || "";
+    let majorMeters = null;
+    let minorMeters = null;
+    let angleDeg = 0;
+    let rectLengthMeters = null;
+    let rectWidthMeters = null;
+    if (ellipseTag) {
+      majorMeters = parseFloat(attr(ellipseTag, "major"));
+      minorMeters = parseFloat(attr(ellipseTag, "minor"));
+      angleDeg = parseFloat(attr(ellipseTag, "angle") || "0");
+    }
+    if (rectangleTag) {
+      rectLengthMeters = parseFloat(attr(rectangleTag, "length") || attr(rectangleTag, "height") || attr(rectangleTag, "major"));
+      rectWidthMeters = parseFloat(attr(rectangleTag, "width") || attr(rectangleTag, "minor"));
+      angleDeg = parseFloat(attr(rectangleTag, "angle") || attr(rectangleTag, "azimuth") || attr(rectangleTag, "heading") || "0");
+    }
+    const radiusMatch =
+      xml.match(/<circle\b[^>]*\bradius=['"]([^'"]+)['"][^>]*>/i)
+      || xml.match(/<radius\b[^>]*\bvalue=['"]([^'"]+)['"][^>]*>/i);
+    const radiusMeters = radiusMatch ? parseFloat(radiusMatch[1]) : null;
+    const rangeMeters = parseFloat(xml.match(/<range\b[^>]*\bvalue=['"]([^'"]+)['"][^>]*>/i)?.[1] || "");
+    const bearingDeg = parseFloat(xml.match(/<bearing\b[^>]*\bvalue=['"]([^'"]+)['"][^>]*>/i)?.[1] || "");
+    const hasPolygonHint = type === "u-d-f" || type === "u-d-r" || /<polygon\b/i.test(xml) || /<shape\b/i.test(xml);
+    const hasLineStringHint = /<lineString\b/i.test(xml) || /<polyline\b/i.test(xml);
+    let featureType = null, latlng = null, latlngs = null, metadataOnly = false;
+    if (vertexPoints.length >= 3 && hasPolygonHint && !hasLineStringHint) {
+      featureType = "polygon";
+      latlngs = vertexPoints;
+    } else if (vertexPoints.length >= 2 && hasLineStringHint) {
+      featureType = "polyline";
+      latlngs = vertexPoints;
+    } else if (linkPoints.length >= 2) {
+      featureType = hasPolygonHint ? "polygon" : "polyline";
+      latlngs = linkPoints;
+    } else if (!isNaN(lat) && !isNaN(lon) && rectLengthMeters != null && rectWidthMeters != null && !isNaN(rectLengthMeters) && !isNaN(rectWidthMeters) && rectLengthMeters > 0 && rectWidthMeters > 0) {
+      featureType = "rectangle";
+      latlng = [lat, lon];
+      latlngs = rectangleToLatLngs([lat, lon], rectLengthMeters, rectWidthMeters, angleDeg);
+    } else if (!isNaN(lat) && !isNaN(lon) && type === "u-rb-a" && !isNaN(rangeMeters) && rangeMeters > 0 && !isNaN(bearingDeg)) {
+      featureType = "ruler";
+      latlng = [lat, lon];
+    } else if (!isNaN(lat) && !isNaN(lon) && type === "u-d-r") {
+      featureType = "rectangle";
+      latlng = [lat, lon];
+      metadataOnly = true;
+    } else if (!isNaN(lat) && !isNaN(lon) && type === "u-d-f") {
+      featureType = "polygon";
+      latlng = [lat, lon];
+      metadataOnly = true;
+    } else if (!isNaN(lat) && !isNaN(lon) && type === "b-m-r") {
+      featureType = "polyline";
+      latlng = [lat, lon];
+      metadataOnly = true;
+    } else if (!isNaN(lat) && !isNaN(lon) && radiusMeters != null && !isNaN(radiusMeters) && radiusMeters > 0) {
+      featureType = "circle";
+      latlng = [lat, lon];
+    } else if (!isNaN(lat) && !isNaN(lon) && majorMeters != null && minorMeters != null && !isNaN(majorMeters) && !isNaN(minorMeters) && majorMeters > 0 && minorMeters > 0) {
+      featureType = Math.abs(majorMeters - minorMeters) < 0.5 ? "circle" : "ellipse";
+      latlng = [lat, lon];
+    } else if (!isNaN(lat) && !isNaN(lon) && (type.startsWith("a-") || type.startsWith("b-") || type.startsWith("u-") || type.startsWith("s-") || type.startsWith("t-"))) {
+      featureType = "marker";
+      latlng = [lat, lon];
+    }
+    if (!featureType) return null;
+    const argbStr =
+      xml.match(/\bargb=['"](-?\d+)['"]/)?.[1]
+      || xml.match(/strokeColor[^>]*value=['"](-?\d+)['"]/)?.[1]
+      || xml.match(/<color\b[^>]*value=['"](-?\d+)['"][^>]*>/i)?.[1];
+    let color = "#4a9eff";
+    let fillColor = color;
+    if (argbStr) {
+      color = _argbIntToHexColor(parseInt(argbStr), "#4a9eff");
+    }
+    const fillArgbStr = xml.match(/fillColor[^>]*value=['"](-?\d+)['"]/)?.[1];
+    if (fillArgbStr) fillColor = _argbIntToHexColor(parseInt(fillArgbStr), color);
+    const strokeWeight = Number.parseFloat(xml.match(/strokeWeight[^>]*value=['"]([^'"]+)['"]/)?.[1] || "") || 1;
+    const strokeStyle = xml.match(/strokeStyle[^>]*value=['"]([^'"]+)['"]/)?.[1] || "solid";
+    return {
+      uid,
+      rawType: type,
+      cotType: type,
+      type: featureType,
+      latlng,
+      latlngs,
+      label,
+      remarks,
+      color,
+      fillColor,
+      strokeWeight,
+      strokeStyle,
+      iconsetPath,
+      metadataOnly,
+      radiusMeters: featureType === "circle" ? (radiusMeters != null && !isNaN(radiusMeters) ? radiusMeters : Math.max(majorMeters || 0, minorMeters || 0)) : null,
+      majorMeters: featureType === "ellipse" ? majorMeters : null,
+      minorMeters: featureType === "ellipse" ? minorMeters : null,
+      rectLengthMeters: featureType === "rectangle" ? rectLengthMeters : null,
+      rectWidthMeters: featureType === "rectangle" ? rectWidthMeters : null,
+      angleDeg: featureType === "ellipse" || featureType === "rectangle" ? angleDeg : null,
+      rangeMeters: featureType === "ruler" ? rangeMeters : null,
+      bearingDeg: featureType === "ruler" ? bearingDeg : null,
+    };
+  } catch { return null; }
+}
+
 function readJson(req) {
   return new Promise((resolve, reject) => {
     let body = "";
@@ -1828,6 +2267,52 @@ function readJson(req) {
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(payload));
+}
+
+function sanitizeFilenamePart(value, fallback = "item") {
+  const safe = String(value || "")
+    .trim()
+    .replace(/[<>:"/\\|?*\x00-\x1f]+/g, "_")
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 64);
+  return safe || fallback;
+}
+
+function captureTakEvent({ direction, sender, uid, rawType, featureType, cotXml, metadata = {} }) {
+  const xml = String(cotXml || "").trim();
+  if (!xml) return null;
+  const capturedAt = new Date().toISOString();
+  const stamp = capturedAt.replace(/[:.]/g, "-");
+  const baseName = [
+    stamp,
+    sanitizeFilenamePart(direction, "tak"),
+    sanitizeFilenamePart(sender, "unknown"),
+    sanitizeFilenamePart(uid || featureType || rawType, "event"),
+    Math.random().toString(36).slice(2, 8),
+  ].join("_");
+  const xmlPath = path.join(TAK_CAPTURE_DIR, `${baseName}.xml`);
+  const jsonPath = path.join(TAK_CAPTURE_DIR, `${baseName}.json`);
+  const payload = {
+    capturedAt,
+    direction: direction || null,
+    sender: sender || null,
+    uid: uid || null,
+    rawType: rawType || null,
+    featureType: featureType || null,
+    bytes: Buffer.byteLength(xml, "utf8"),
+    metadata: metadata || {},
+    xmlFile: path.basename(xmlPath),
+  };
+  fs.writeFileSync(xmlPath, xml, "utf8");
+  fs.writeFileSync(jsonPath, JSON.stringify(payload, null, 2), "utf8");
+  return {
+    xmlPath,
+    jsonPath,
+    xmlFile: path.basename(xmlPath),
+    jsonFile: path.basename(jsonPath),
+  };
 }
 
 function buildPythonEnv(includeSelectedPort = true) {
@@ -3106,9 +3591,120 @@ function startBridge() {
             // no-op, nodes snapshot follows
           } else if (message.type === "position_requested") {
             broadcast("position_requested", { nodeId: message.payload?.destinationId });
+          } else if (message.type === "tak_sent") {
+            const transport = String(message.payload?.transport || "");
+            broadcast("tak_send_status", {
+              uid: message.payload?.uid,
+              status: transport === "fountain-unconfirmed" ? "unconfirmed" : "sent",
+              transport,
+            });
+          } else if (message.type === "tak") {
+            const cotXml = message.payload?.cotXml || "";
+            if (cotXml) {
+              const feature = parseCotXml(cotXml);
+              const capture = captureTakEvent({
+                direction: "incoming",
+                sender: message.payload?.sender || "unknown",
+                uid: feature?.uid || "",
+                rawType: feature?.rawType || "",
+                featureType: feature?.type || "",
+                cotXml,
+                metadata: feature
+                  ? {
+                      parsed: true,
+                      label: feature.label || "",
+                      color: feature.color || "",
+                      latlng: feature.latlng || null,
+                      latlngs: Array.isArray(feature.latlngs) ? feature.latlngs : null,
+                      radiusMeters: feature.radiusMeters ?? null,
+                      majorMeters: feature.majorMeters ?? null,
+                      minorMeters: feature.minorMeters ?? null,
+                      rectLengthMeters: feature.rectLengthMeters ?? null,
+                      rectWidthMeters: feature.rectWidthMeters ?? null,
+                      angleDeg: feature.angleDeg ?? null,
+                      rangeMeters: feature.rangeMeters ?? null,
+                      bearingDeg: feature.bearingDeg ?? null,
+                      metadataOnly: feature.metadataOnly === true,
+                    }
+                  : {
+                      parsed: false,
+                      preview: cotXml.replace(/\s+/g, " ").slice(0, 320),
+                    },
+              });
+              if (feature) {
+                addMessage({
+                  direction: "system",
+                  sender: "tak",
+                  recipient: "-",
+                  text: `TAK parsed raw=${feature.rawType || "-"} type=${feature.type} uid=${feature.uid || "-"} label=${feature.label || "-"} lat=${Array.isArray(feature.latlng) ? feature.latlng[0] : "-"} lon=${Array.isArray(feature.latlng) ? feature.latlng[1] : "-"} radius=${feature.radiusMeters ?? "-"} major=${feature.majorMeters ?? "-"} minor=${feature.minorMeters ?? "-"} rectL=${feature.rectLengthMeters ?? "-"} rectW=${feature.rectWidthMeters ?? "-"} range=${feature.rangeMeters ?? "-"} bearing=${feature.bearingDeg ?? "-"} metaOnly=${feature.metadataOnly === true ? 1 : 0} capture=${capture?.xmlFile || "-"}`,
+                  transport: "tak",
+                });
+                feature.sender = message.payload?.sender || null;
+                if (feature.type === "delete") latestTakFeatures.delete(feature.uid);
+                else latestTakFeatures.set(feature.uid, feature);
+                broadcast("tak_feature", feature);
+              } else {
+                addMessage({
+                  direction: "system",
+                  sender: "tak",
+                  recipient: "-",
+                  text: `TAK XML received but not rendered from ${message.payload?.sender || "unknown"} capture=${capture?.xmlFile || "-"}: ${cotXml.replace(/\s+/g, " ").slice(0, 320)}`,
+                  transport: "tak",
+                });
+              }
+            }
+          } else if (message.type === "tak_debug") {
+            const payload = message.payload || {};
+            const side = payload.direction || "rx";
+            const portnum = payload.portnum || "UNKNOWN";
+            const sender = payload.sender || "unknown";
+            const channel = payload.channelIndex ?? 0;
+            const hop = payload.hopLimit ?? "-";
+            const transport = payload.transport ? ` ${payload.transport}` : "";
+            const decode = payload.decode ? ` decode=${payload.decode}` : "";
+            const bytes = payload.compressedBytes != null
+              ? ` ${payload.compressedBytes}B`
+              : payload.payloadBytes != null
+                ? ` ${payload.payloadBytes}B`
+                : "";
+            const blocks = payload.blocksReceived != null && payload.sourceBlockCount != null
+              ? ` blocks=${payload.blocksReceived}/${payload.sourceBlockCount}`
+              : "";
+            const totalLen = payload.totalLength != null ? ` len=${payload.totalLength}` : "";
+            const transferType = payload.transferType != null ? ` type=${payload.transferType}` : "";
+            const prefix = payload.payloadPrefix ? ` prefix=${payload.payloadPrefix}` : "";
+            const cotBytes = payload.cotXmlBytes != null ? ` cot=${payload.cotXmlBytes}` : "";
+            const payloadDebug = payload.payloadDebug || {};
+            const inflate =
+              payloadDebug.zlibBytes != null
+                ? ` zlib=${payloadDebug.zlibBytes}`
+                : payloadDebug["raw-deflateBytes"] != null
+                  ? ` rawdeflate=${payloadDebug["raw-deflateBytes"]}`
+                  : "";
+            const inflatePrefix = payloadDebug.zlibPrefix
+              ? ` zprefix=${payloadDebug.zlibPrefix}`
+              : payloadDebug["raw-deflatePrefix"]
+                ? ` rprefix=${payloadDebug["raw-deflatePrefix"]}`
+                : "";
+            const preview = payloadDebug.zlibPreview
+              ? ` preview=${JSON.stringify(payloadDebug.zlibPreview)}`
+              : payloadDebug["raw-deflatePreview"]
+                ? ` preview=${JSON.stringify(payloadDebug["raw-deflatePreview"])}`
+                : "";
+            const extra = payload.note ? ` ${payload.note}` : "";
+            addMessage({
+              direction: "system",
+              sender: "tak",
+              recipient: "-",
+              text: `${side.toUpperCase()} ${portnum} from ${sender} ch${channel} hop ${hop}${transport}${bytes}${decode}${blocks}${totalLen}${transferType}${cotBytes}${prefix}${inflate}${inflatePrefix}${preview}${extra}`,
+              transport: "tak",
+            });
           } else if (message.type === "error") {
             if (activeBridge === bridgeProcess) {
               updateMeshtasticStatus({ error: message.payload.message || "bridge error" });
+            }
+            if (message.payload?.uid) {
+              broadcast("tak_send_status", { uid: message.payload.uid, status: "error", reason: message.payload.message || "" });
             }
             addMessage({
               direction: "system",
@@ -3199,6 +3795,9 @@ const server = http.createServer(async (req, res) => {
       });
       res.write(`event: status\ndata: ${JSON.stringify({ meshtastic: getMeshtasticStatusPayload(), llm: llmStatus })}\n\n`);
       res.write(`event: nodes\ndata: ${JSON.stringify(getNodesPayload())}\n\n`);
+      if (latestTakFeatures.size > 0) {
+        res.write(`event: tak_features\ndata: ${JSON.stringify([...latestTakFeatures.values()])}\n\n`);
+      }
       clients.add(res);
       req.on("close", () => clients.delete(res));
       return;
@@ -3265,13 +3864,24 @@ const server = http.createServer(async (req, res) => {
         longName: localNode?.longName || "",
         latitude: localNode?.latitude ?? null,
         longitude: localNode?.longitude ?? null,
+        takChannel: getConfiguredTakChannel(),
+        takHopLimit: getConfiguredTakHopLimit(),
       });
     }
 
     if (req.method === "POST" && req.url === "/api/device-meta") {
       const body = await readJson(req);
+      if (Object.prototype.hasOwnProperty.call(body, "takChannel")) {
+        setConfiguredTakChannel(body.takChannel);
+      }
+      if (Object.prototype.hasOwnProperty.call(body, "takHopLimit")) {
+        setConfiguredTakHopLimit(body.takHopLimit);
+      }
       try {
-        sendBridge({ type: "set_device_meta", payload: body });
+        const bridgePayload = { ...body };
+        delete bridgePayload.takChannel;
+        delete bridgePayload.takHopLimit;
+        sendBridge({ type: "set_device_meta", payload: bridgePayload });
         return sendJson(res, 200, { ok: true });
       } catch (e) {
         return sendJson(res, 503, { error: e.message });
@@ -3378,6 +3988,162 @@ const server = http.createServer(async (req, res) => {
       const reply = await generateReply(peerId, text);
       addMessage({ direction: "out", sender: "local-ai", recipient: peerId, text: reply, transport: "web" });
       return sendJson(res, 200, { reply });
+    }
+
+    if (req.method === "POST" && req.url === "/api/tak/send") {
+      const body = await readJson(req);
+      const uid = body.uid || `tak-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const feature = {
+        uid,
+        type: body.type,
+        latlng: body.latlng,
+        latlngs: body.latlngs,
+        radiusMeters: body.radiusMeters ?? null,
+        rangeMeters: body.rangeMeters ?? null,
+        bearingDeg: body.bearingDeg ?? null,
+        majorMeters: body.majorMeters ?? null,
+        minorMeters: body.minorMeters ?? null,
+        angleDeg: body.angleDeg ?? null,
+        label: body.label || "",
+        color: body.color || "#4a9eff",
+        fillColor: body.fillColor || body.color || "#4a9eff",
+        strokeWeight: body.strokeWeight ?? 1,
+        strokeStyle: body.strokeStyle || "solid",
+        remarks: body.remarks || "",
+        cotType: body.cotType || "",
+        iconsetPath: body.iconsetPath || "",
+        markerPreset: body.markerPreset || "",
+      };
+      const takBuild = buildTakCotForMesh(feature);
+      if (!takBuild?.cotXml) {
+        return sendJson(res, 400, {
+          error: takBuild?.error || "invalid feature type",
+          compressedBytes: takBuild?.compressedBytes ?? null,
+          originalPoints: takBuild?.originalPoints ?? null,
+          sentPoints: takBuild?.sentPoints ?? null,
+        });
+      }
+      const cotXml = takBuild.cotXml;
+      const compressedBytes = takBuild.compressedBytes ?? compressCotXml(cotXml).length;
+      const capture = captureTakEvent({
+        direction: "outgoing",
+        sender: "local-ui",
+        uid,
+        rawType: feature.type,
+        featureType: feature.type,
+        cotXml,
+        metadata: {
+          label: feature.label || "",
+          color: feature.color || "",
+          fillColor: feature.fillColor || "",
+          strokeWeight: feature.strokeWeight ?? 1,
+          strokeStyle: feature.strokeStyle || "",
+          remarks: feature.remarks || "",
+          cotType: feature.cotType || "",
+          iconsetPath: feature.iconsetPath || "",
+          latlng: feature.latlng || null,
+          latlngs: Array.isArray(feature.latlngs) ? feature.latlngs : null,
+          radiusMeters: feature.radiusMeters ?? null,
+          rangeMeters: feature.rangeMeters ?? null,
+          bearingDeg: feature.bearingDeg ?? null,
+          majorMeters: feature.majorMeters ?? null,
+          minorMeters: feature.minorMeters ?? null,
+          angleDeg: feature.angleDeg ?? null,
+          compressedBytes,
+          channelIndex: getConfiguredTakChannel(),
+          hopLimit: getConfiguredTakHopLimit(),
+        },
+      });
+      let bridgeOnline = true;
+      try {
+        sendBridge({
+          type: "send_tak",
+          payload: {
+            cotXml,
+            destinationId: "^all",
+            uid,
+            channelIndex: getConfiguredTakChannel(),
+            hopLimit: getConfiguredTakHopLimit(),
+          },
+        });
+      } catch (_) { bridgeOnline = false; }
+      if (bridgeOnline) broadcast("tak_send_status", { uid, status: "queued" });
+      if (!bridgeOnline) broadcast("tak_send_status", { uid, status: "error", reason: "bridge_offline" });
+      return sendJson(res, 200, {
+        ok: bridgeOnline,
+        uid,
+        captureFile: capture?.xmlFile || null,
+        error: bridgeOnline ? null : "bridge not connected",
+        simplified: takBuild.simplified === true,
+        downgradedTo: takBuild.downgradedTo || null,
+        compressedBytes,
+        originalPoints: takBuild.originalPoints ?? null,
+        sentPoints: takBuild.sentPoints ?? null,
+      });
+    }
+
+    if (req.method === "POST" && req.url === "/api/tak/delete") {
+      const body = await readJson(req);
+      const uid = String(body.uid || "").trim();
+      if (!uid) {
+        return sendJson(res, 400, { error: "uid is required" });
+      }
+      const feature = {
+        uid,
+        type: body.type || "",
+        rawType: body.rawType || "",
+        cotType: body.cotType || "",
+        latlng: body.latlng || null,
+        radiusMeters: body.radiusMeters ?? null,
+        rangeMeters: body.rangeMeters ?? null,
+        bearingDeg: body.bearingDeg ?? null,
+      };
+      const cotXml = buildTakDeleteCot(feature);
+      if (!cotXml) {
+        return sendJson(res, 400, { error: "unable to build TAK delete event" });
+      }
+      const compressedBytes = compressCotXml(cotXml).length;
+      const capture = captureTakEvent({
+        direction: "outgoing",
+        sender: "local-ui",
+        uid,
+        rawType: feature.rawType || feature.cotType || feature.type || "delete",
+        featureType: "delete",
+        cotXml,
+        metadata: {
+          delete: true,
+          targetType: feature.type || "",
+          latlng: feature.latlng || null,
+          radiusMeters: feature.radiusMeters ?? null,
+          rangeMeters: feature.rangeMeters ?? null,
+          bearingDeg: feature.bearingDeg ?? null,
+          compressedBytes,
+          channelIndex: getConfiguredTakChannel(),
+          hopLimit: getConfiguredTakHopLimit(),
+        },
+      });
+      let bridgeOnline = true;
+      try {
+        sendBridge({
+          type: "send_tak",
+          payload: {
+            cotXml,
+            destinationId: "^all",
+            uid,
+            channelIndex: getConfiguredTakChannel(),
+            hopLimit: getConfiguredTakHopLimit(),
+          },
+        });
+      } catch (_) { bridgeOnline = false; }
+      if (bridgeOnline) broadcast("tak_send_status", { uid, status: "queued" });
+      if (!bridgeOnline) broadcast("tak_send_status", { uid, status: "error", reason: "bridge_offline" });
+      return sendJson(res, 200, {
+        ok: bridgeOnline,
+        uid,
+        captureFile: capture?.xmlFile || null,
+        error: bridgeOnline ? null : "bridge not connected",
+        compressedBytes,
+      });
     }
 
     if (req.method === "POST" && req.url === "/api/mesh/send") {

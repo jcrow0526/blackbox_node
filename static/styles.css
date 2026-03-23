@@ -676,10 +676,10 @@ select {
   position: relative;
 }
 
-/* Delivery status icon — top-right corner of outgoing bubble */
+/* Delivery status icon — bottom-right corner of outgoing bubble */
 .chat-bubble-ack {
   position: absolute;
-  top: 5px;
+  bottom: 5px;
   right: 6px;
   width: 12px;
   height: 12px;
@@ -3489,4 +3489,580 @@ textarea,
   border-left-color: var(--edge-dark);
   border-right-color: var(--edge-light);
   border-bottom-color: var(--edge-light);
+}
+
+/* ── TAK / ATAK Panel ─────────────────────────────────────────────────────── */
+.tak-panel {
+  background: rgba(13, 16, 22, 0.96);
+  border: 1px solid rgba(74, 158, 255, 0.22);
+  border-radius: 0;
+  color: #c8d8e8;
+  font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+  font-size: 12px;
+  min-width: 210px;
+  max-width: 240px;
+  max-height: 72vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  pointer-events: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(74,158,255,0.25) transparent;
+}
+.tak-panel.hidden {
+  display: none;
+}
+.tak-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px 6px;
+  border-bottom: 1px solid rgba(74, 158, 255, 0.15);
+}
+.tak-panel-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #4a9eff;
+}
+.tak-panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: #8ea9c4;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.12s, color 0.12s;
+}
+.tak-panel-close:hover {
+  opacity: 1;
+  color: #d3e4f5;
+}
+@keyframes tak-spin-text {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.tak-section {
+  padding: 7px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.tak-section:last-child {
+  border-bottom: none;
+}
+.tak-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #6a8aa8;
+  margin-bottom: 6px;
+}
+.tak-layer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 0.12s;
+  margin-bottom: 2px;
+}
+.tak-layer-row:hover {
+  background: rgba(74, 158, 255, 0.08);
+}
+.tak-layer-row.tak-layer-active {
+  background: rgba(74, 158, 255, 0.14);
+  outline: 1px solid rgba(74, 158, 255, 0.3);
+}
+.tak-layer-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 0;
+  flex-shrink: 0;
+}
+.tak-layer-name {
+  flex: 1;
+  font-size: 11.5px;
+  color: #c0d0e0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tak-layer-hidden {
+  opacity: 0.38;
+  text-decoration: line-through;
+}
+.tak-layer-vis {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0.5;
+  color: #c0d0e0;
+  display: flex;
+  align-items: center;
+  transition: opacity 0.12s;
+  flex-shrink: 0;
+}
+.tak-layer-vis:hover {
+  opacity: 1;
+}
+.tak-layer-status,
+.tak-layer-resend {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: opacity 0.12s, color 0.12s, transform 0.12s;
+}
+.tak-layer-status {
+  opacity: 0.72;
+  color: #6f859b;
+}
+.tak-layer-status--sending {
+  color: #9eb8cf;
+  animation: tak-spin-text 1.2s linear infinite;
+}
+.tak-layer-status--sent {
+  color: #4caf50;
+}
+.tak-layer-status--unconfirmed {
+  color: #ffb347;
+}
+.tak-layer-status--error {
+  color: #ff6060;
+}
+.tak-layer-status:hover {
+  opacity: 1;
+}
+.tak-layer-resend {
+  opacity: 0.45;
+  color: #8fb6ff;
+}
+.tak-layer-resend:hover {
+  opacity: 1;
+  transform: rotate(-20deg);
+}
+.tak-layer-delete {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0.3;
+  color: #ff6060;
+  font-size: 15px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: opacity 0.12s;
+}
+.tak-layer-delete:hover {
+  opacity: 1;
+}
+.tak-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 4px 14px;
+}
+.tak-item-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  padding: 2px 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 1px solid rgba(74, 158, 255, 0.18);
+}
+.tak-item-type {
+  flex-shrink: 0;
+  min-width: 44px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #6f93b7;
+}
+.tak-item-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: #c0d0e0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tak-item-delete {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #ff6060;
+  opacity: 0.42;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: opacity 0.12s;
+}
+.tak-item-delete:hover {
+  opacity: 1;
+}
+.tak-mini-btn {
+  background: rgba(74, 158, 255, 0.12);
+  border: 1px solid rgba(74, 158, 255, 0.28);
+  color: #4a9eff;
+  border-radius: 0;
+  padding: 1px 7px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.12s;
+  font-family: inherit;
+  line-height: 1.5;
+}
+.tak-mini-btn:hover {
+  background: rgba(74, 158, 255, 0.22);
+}
+.tak-draw-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tak-draw-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #b0c4d8;
+  border-radius: 0;
+  padding: 5px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
+.tak-draw-btn:hover {
+  background: rgba(74, 158, 255, 0.1);
+  border-color: rgba(74, 158, 255, 0.28);
+  color: #c8dff0;
+}
+.tak-draw-btn.tak-draw-btn--active {
+  background: rgba(74, 158, 255, 0.18);
+  border-color: rgba(74, 158, 255, 0.5);
+  color: #4a9eff;
+}
+.tak-draw-hint {
+  font-size: 10px;
+  color: #6a8aa8;
+  padding: 4px 2px 0;
+  line-height: 1.5;
+}
+.tak-draw-hint.hidden {
+  display: none;
+}
+.tak-draw-actions {
+  display: flex;
+  gap: 5px;
+  margin-top: 5px;
+}
+.tak-draw-finish {
+  flex: 1;
+  background: rgba(74, 158, 255, 0.12);
+  border: 1px solid rgba(74, 158, 255, 0.4);
+  color: #4a9eff;
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.12s;
+  font-family: inherit;
+}
+.tak-draw-finish:hover:not(:disabled) {
+  background: rgba(74, 158, 255, 0.22);
+}
+.tak-draw-finish:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.tak-draw-finish.hidden {
+  display: none;
+}
+.tak-draw-cancel {
+  flex: 1;
+  background: rgba(255, 80, 80, 0.08);
+  border: 1px solid rgba(255, 80, 80, 0.28);
+  color: #ff7070;
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.12s;
+  font-family: inherit;
+}
+.tak-draw-cancel:hover {
+  background: rgba(255, 80, 80, 0.18);
+}
+.tak-draw-cancel.hidden {
+  display: none;
+}
+.tak-empty-hint {
+  font-size: 11px;
+  color: #4a6070;
+  padding: 2px 0;
+  font-style: italic;
+}
+/* TAK Inline Dialog */
+.tak-panel {
+  position: relative;
+}
+.tak-inline-dialog {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 13, 20, 0.96);
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px 14px;
+  z-index: 20;
+}
+.tak-map-editor {
+  position: absolute;
+  min-width: 220px;
+  max-width: 246px;
+  background: rgba(10, 13, 20, 0.97);
+  border: 1px solid rgba(74, 158, 255, 0.28);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  z-index: 1500;
+}
+.tak-map-editor.hidden {
+  display: none;
+}
+.tak-map-editor--compact .tak-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.tak-map-editor--compact .tak-form-field--wide {
+  grid-column: 1 / -1;
+}
+.tak-map-editor--compact .tak-dialog-label {
+  font-size: 10px;
+}
+.tak-map-editor--compact .tak-dialog-input,
+.tak-map-editor--compact .tak-dialog-select,
+.tak-map-editor--compact .tak-dialog-textarea {
+  font-size: 11px;
+  padding: 5px 7px;
+}
+.tak-map-editor--compact .tak-dialog-textarea {
+  min-height: 54px;
+}
+.tak-map-editor--compact .tak-dialog-actions {
+  gap: 4px;
+}
+.tak-map-editor--compact .tak-dialog-ok,
+.tak-map-editor--compact .tak-dialog-cancel-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+.tak-inline-dialog.hidden {
+  display: none;
+}
+.tak-dialog-label {
+  font-size: 11px;
+  color: #a0b8cc;
+  font-weight: 600;
+}
+.tak-dialog-input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(74, 158, 255, 0.35);
+  border-radius: 5px;
+  color: #e0eaf4;
+  font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+  font-size: 12px;
+  padding: 6px 9px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+.tak-dialog-input:focus {
+  border-color: rgba(74, 158, 255, 0.7);
+}
+.tak-dialog-select,
+.tak-dialog-textarea {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(74, 158, 255, 0.35);
+  border-radius: 5px;
+  color: #e0eaf4;
+  font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+  font-size: 12px;
+  padding: 6px 9px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+.tak-dialog-select:focus,
+.tak-dialog-textarea:focus {
+  border-color: rgba(74, 158, 255, 0.7);
+}
+.tak-dialog-textarea {
+  resize: vertical;
+  min-height: 68px;
+}
+.tak-dialog-color {
+  min-height: 34px;
+  padding: 3px;
+}
+.tak-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.tak-feature-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid rgba(74, 158, 255, 0.22);
+  background: rgba(255, 255, 255, 0.03);
+}
+.tak-map-editor--compact .tak-feature-preview {
+  padding: 6px 8px;
+}
+.tak-feature-preview-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: #6a8aa8;
+}
+.tak-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tak-form-field span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: #6a8aa8;
+}
+.tak-form-field--wide {
+  grid-column: 1 / -1;
+}
+.tak-dialog-actions {
+  display: flex;
+  gap: 6px;
+}
+.tak-dialog-ok {
+  flex: 1;
+  background: rgba(74, 158, 255, 0.18);
+  border: 1px solid rgba(74, 158, 255, 0.45);
+  color: #4a9eff;
+  border-radius: 5px;
+  padding: 5px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s;
+}
+.tak-dialog-ok:hover {
+  background: rgba(74, 158, 255, 0.3);
+}
+.tak-dialog-ok--danger {
+  background: rgba(255, 80, 80, 0.12);
+  border-color: rgba(255, 80, 80, 0.4);
+  color: #ff6060;
+}
+.tak-dialog-ok--danger:hover {
+  background: rgba(255, 80, 80, 0.25);
+}
+.tak-dialog-cancel-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #7a9ab8;
+  border-radius: 5px;
+  padding: 5px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s;
+}
+.tak-dialog-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #a0b8cc;
+}
+
+/* Crosshair cursor while drawing */
+.nodes-map-container.tak-drawing,
+.nodes-map-container.tak-drawing .leaflet-container {
+  cursor: crosshair !important;
+}
+/* TAK waypoint markers */
+.tak-marker-icon {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  display: block;
+  overflow: visible;
+}
+.tak-marker-symbol {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 5px rgba(0,0,0,0.6));
+}
+.tak-marker-symbol svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+.tak-marker-label {
+  position: absolute;
+  left: 50%;
+  top: 18px;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: #fff;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(0,0,0,0.7);
+  font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+}
+.tak-measure-label {
+  position: relative;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 2px 6px;
+  background: rgba(8, 12, 18, 0.88);
+  border: 1px solid rgba(74, 158, 255, 0.24);
+  color: #d8e6f2;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  pointer-events: none;
 }

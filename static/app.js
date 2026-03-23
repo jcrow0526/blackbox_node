@@ -1,4 +1,4 @@
-const logBox = document.getElementById("log");
+﻿const logBox = document.getElementById("log");
 const deviceStatus = document.getElementById("deviceStatus");
 const deviceStatusTitle = document.getElementById("deviceStatusTitle");
 const deviceStatusText = document.getElementById("deviceStatusText");
@@ -193,6 +193,8 @@ const deviceMetaShortName = document.getElementById("deviceMetaShortName");
 const deviceMetaLongName = document.getElementById("deviceMetaLongName");
 const deviceMetaLat = document.getElementById("deviceMetaLat");
 const deviceMetaLon = document.getElementById("deviceMetaLon");
+const deviceMetaTakChannel = document.getElementById("deviceMetaTakChannel");
+const deviceMetaTakHopLimit = document.getElementById("deviceMetaTakHopLimit");
 const deviceMetaStatus = document.getElementById("deviceMetaStatus");
 const deviceMetaSave = document.getElementById("deviceMetaSave");
 const settingsMintUrlInput = document.getElementById("settingsMintUrlInput");
@@ -628,15 +630,15 @@ function parseMeshPart(text) {
   return { partNum: Number(m[1]), total: Number(m[2]), content: text.slice(m[0].length) };
 }
 
-// Extract sats from the first fragment's content, e.g. "[250 sats] cashuA..." → 250
+// Extract sats from the first fragment's content, e.g. "[250 sats] cashuA..." Р Р†РІР‚В РІР‚в„ў 250
 function extractSatsFromFragment(content) {
   const m = /^\[(\d+)\s*sats?\]/i.exec((content || "").trim());
   return m ? Number(m[1]) : null;
 }
 
 // Group sequential [N/T] mesh fragments from the same sender into one virtual message.
-// - All parts present + assembled is a Cashu token → { isCashuToken: true, fragmentCount }
-// - Starts at [1/T] but incomplete → { isCashuFragment: true, receivedParts, totalParts, sats }
+// - All parts present + assembled is a Cashu token Р Р†РІР‚В РІР‚в„ў { isCashuToken: true, fragmentCount }
+// - Starts at [1/T] but incomplete Р Р†РІР‚В РІР‚в„ў { isCashuFragment: true, receivedParts, totalParts, sats }
 // - Orphaned fragments (no [1/T]) fall through as regular messages
 function groupCashuFragments(thread) {
   const result = [];
@@ -657,7 +659,7 @@ function groupCashuFragments(thread) {
       }
 
       if (k === part.total) {
-        // All parts present — assemble and check
+        // All parts present Р Р†Р вЂљРІР‚Сњ assemble and check
         const parts = [];
         for (let j = 0; j < part.total; j++) parts.push(parseMeshPart(thread[i + j].text).content);
         const assembled = parts.join("");
@@ -667,7 +669,7 @@ function groupCashuFragments(thread) {
           continue;
         }
       } else {
-        // Partial transfer in progress — show progress bar
+        // Partial transfer in progress Р Р†Р вЂљРІР‚Сњ show progress bar
         const sats = extractSatsFromFragment(part.content);
         result.push({ ...msg, isCashuFragment: true, receivedParts: k, totalParts: part.total, sats });
         i += k;
@@ -779,7 +781,7 @@ function renderDmChat() {
 
       const tokenHint = document.createElement("div");
       tokenHint.style.cssText = "font-size:0.72em;opacity:0.5;margin-bottom:8px";
-      tokenHint.textContent = `Cashu token${message.fragmentCount > 1 ? ` · ${message.fragmentCount} parts` : ""}`;
+      tokenHint.textContent = `Cashu token${message.fragmentCount > 1 ? ` Р вЂ™Р’В· ${message.fragmentCount} parts` : ""}`;
       body.appendChild(tokenHint);
 
       const redeemBtn = document.createElement("button");
@@ -809,7 +811,7 @@ function renderDmChat() {
           });
           redeemedCashuTokens.add(token);
           statusSpan.textContent = data.unverified
-            ? `+${data.amount} sats (offline, unverified — confirm when online)`
+            ? `+${data.amount} sats (offline, unverified Р Р†Р вЂљРІР‚Сњ confirm when online)`
             : `+${data.amount} sats added to balance`;
           redeemBtn.textContent = "Redeemed";
           if (cashuState) { cashuState.balance = data.balance; applyCashuState(); }
@@ -1250,11 +1252,15 @@ function openDeviceMetaModal() {
   deviceMetaLongName.value = "";
   deviceMetaLat.value = "";
   deviceMetaLon.value = "";
+  if (deviceMetaTakChannel) deviceMetaTakChannel.value = "";
+  if (deviceMetaTakHopLimit) deviceMetaTakHopLimit.value = "";
   fetchJson("/api/device-meta").then((data) => {
     deviceMetaShortName.value = data.shortName || "";
     deviceMetaLongName.value = data.longName || "";
     deviceMetaLat.value = data.latitude != null ? data.latitude : "";
     deviceMetaLon.value = data.longitude != null ? data.longitude : "";
+    if (deviceMetaTakChannel) deviceMetaTakChannel.value = data.takChannel != null ? data.takChannel : 0;
+    if (deviceMetaTakHopLimit) deviceMetaTakHopLimit.value = data.takHopLimit != null ? data.takHopLimit : 3;
     deviceMetaStatus.textContent = "";
   }).catch((err) => {
     deviceMetaStatus.textContent = `Load error: ${err.message}`;
@@ -1299,7 +1305,7 @@ function applyTestMode() {
   if (swapLnTestHint) swapLnTestHint.hidden = !tm;
   if (swapCashuTestHint) swapCashuTestHint.hidden = !tm;
 
-  // BTC → Lightning via Boltz: not available on testnet/mutinynet
+  // BTC Р Р†РІР‚В РІР‚в„ў Lightning via Boltz: not available on testnet/mutinynet
   const sendBtcLnTestNotice = document.getElementById("sendBtcLnTestNotice");
   const sendBtcLnProdBlock = document.getElementById("sendBtcLnProdBlock");
   if (sendBtcLnTestNotice) sendBtcLnTestNotice.hidden = !tm;
@@ -1318,7 +1324,7 @@ function setWalletStatusRow() {
 }
 
 function formatSats(sats) {
-  if (sats === null || sats === undefined) return "—";
+  if (sats === null || sats === undefined) return "Р Р†Р вЂљРІР‚Сњ";
   const unit = walletState.settings.preferredUnit;
   if (unit === "BTC") {
     return `${(sats / 1e8).toFixed(8)} BTC`;
@@ -1328,13 +1334,13 @@ function formatSats(sats) {
 
 function updateWalletBalanceDisplay() {
   if (!walletState.walletConfigured) {
-    walletBalanceValue.textContent = "—";
+    walletBalanceValue.textContent = "Р Р†Р вЂљРІР‚Сњ";
     walletBalanceSub.textContent = "No wallet created";
     walletRefreshBalance.hidden = true;
     return;
   }
   if (!walletState.balance) {
-    walletBalanceValue.textContent = "—";
+    walletBalanceValue.textContent = "Р Р†Р вЂљРІР‚Сњ";
     walletBalanceSub.textContent = "Balance unavailable (offline?)";
     walletRefreshBalance.hidden = false;
     return;
@@ -1366,7 +1372,7 @@ async function loadWalletTransactions() {
     walletState.history = (data.transactions || []).map((tx) => ({
       id: tx.txid,
       direction: tx.direction,
-      peer: tx.txid ? tx.txid.slice(0, 12) + "..." : "—",
+      peer: tx.txid ? tx.txid.slice(0, 12) + "..." : "Р Р†Р вЂљРІР‚Сњ",
       amount: tx.amount,
       unit: "sats",
       status: tx.confirmed ? "Confirmed" : "Pending",
@@ -1375,7 +1381,7 @@ async function loadWalletTransactions() {
     renderWalletHistory();
     renderWalletHomeActivity();
   } catch {
-    // offline — keep existing history
+    // offline Р Р†Р вЂљРІР‚Сњ keep existing history
   }
 }
 
@@ -1401,7 +1407,7 @@ function renderWalletSettingsInfo() {
   const rows = [
     ["Type", "BIP84 HD Wallet (P2WPKH)"],
     ["Network", tm ? "Bitcoin Testnet (Mutinynet)" : "Bitcoin Mainnet"],
-    ["Address", walletState.address ? walletState.address.slice(0, 20) + "..." : "—"],
+    ["Address", walletState.address ? walletState.address.slice(0, 20) + "..." : "Р Р†Р вЂљРІР‚Сњ"],
     ["Path", tm ? "m/84'/1'/0'/0/0" : "m/84'/0'/0'/0/0"],
     ["Storage", tm ? "./data/test_wallet.json" : "./data/wallet.json"],
   ];
@@ -1453,7 +1459,7 @@ async function loadWalletState() {
   fetchJson("/api/swap/list").then((data) => renderActiveSwaps(data || [])).catch(() => {});
 }
 
-// ─── Cashu UI ─────────────────────────────────────────────────────────────────
+// Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ Cashu UI Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
 
 function applyCashuState() {
   const cfg = cashuState.configured;
@@ -1461,8 +1467,8 @@ function applyCashuState() {
   if (cashuSendNoMint) cashuSendNoMint.hidden = cfg;
   if (cashuSendContent) cashuSendContent.hidden = !cfg;
   // Home balances
-  if (cashuBalanceValue) cashuBalanceValue.textContent = cfg ? formatSats(cashuState.balance) : "—";
-  if (cashuBalanceSub) cashuBalanceSub.textContent = cfg ? (cashuState.mintUrl || "") : "No mint configured — go to Fund";
+  if (cashuBalanceValue) cashuBalanceValue.textContent = cfg ? formatSats(cashuState.balance) : "Р Р†Р вЂљРІР‚Сњ";
+  if (cashuBalanceSub) cashuBalanceSub.textContent = cfg ? (cashuState.mintUrl || "") : "No mint configured Р Р†Р вЂљРІР‚Сњ go to Fund";
   if (cashuSendAvailable) cashuSendAvailable.textContent = formatSats(cashuState.balance);
   if (swapCashuAvailable) swapCashuAvailable.textContent = formatSats(cashuState.balance);
   // Pending (offline) balance row
@@ -1560,7 +1566,7 @@ if (cashuSwapPendingBtn) {
   });
 }
 
-// ─── End Cashu UI ─────────────────────────────────────────────────────────────
+// Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ End Cashu UI Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
 
 function renderWalletHistory() {
   walletHistoryBody.innerHTML = "";
@@ -1857,7 +1863,7 @@ async function openNodeModal(nodeId) {
     const payload = await fetchJson(`/api/node-raw?id=${encodeURIComponent(nodeId)}`);
     const isOnline = !!payload.online;
     nodeModalDot.className = `node-dot${isOnline ? " node-dot--online" : " node-dot--offline"}`;
-    nodeModalSubtitle.textContent = `${payload.role || "node"} · ${payload.observedPortnums?.length ? "live packets seen" : "snapshot only"}`;
+    nodeModalSubtitle.textContent = `${payload.role || "node"} Р вЂ™Р’В· ${payload.observedPortnums?.length ? "live packets seen" : "snapshot only"}`;
 
     const raw = payload.raw || {};
     const lat = raw.position?.latitude ?? raw.latitude;
@@ -1872,7 +1878,7 @@ async function openNodeModal(nodeId) {
     renderKv(nodeModalStatus, [
       ["Online", isOnline ? "yes" : "no"],
       ["Live", payload.live ? "yes" : "no"],
-      ["Hops", raw.hopsAway ?? "—"],
+      ["Hops", raw.hopsAway ?? "Р Р†Р вЂљРІР‚Сњ"],
       ["SNR", formatMetric("SNR", raw.snr)],
     ]);
 
@@ -1983,7 +1989,7 @@ function _setupLocateButton(nodeId, peerId, hasPos) {
   };
 }
 
-// ── Nodes Map ─────────────────────────────────────────────────────────────────
+// Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ Nodes Map Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
 let _mapInstance = null;
 let _mapMarkers = [];
 let _mapCircles = [];
@@ -1996,6 +2002,297 @@ let _mapColorByRole = false;
 let _mapRoleFilter = new Set(); // empty = show all
 let _mapHoverMaxHops = 3;
 let _mapShowTooltips = true;
+
+// Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ TAK / ATAK layer mode Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
+let _takIncomingLayer = null;          // Leaflet LayerGroup for network-received features
+const _takIncomingMap = new Map();     // uid -> Leaflet layer (for dedup/update)
+const _takIncomingFeatures = new Map(); // uid -> latest incoming TAK feature payload
+const _takPendingSends = new Map();    // uid -> { timer, layerId }
+const _takLayerSendState = new Map();  // layerId -> { state, text }
+const _takLayerSendTimers = new Map(); // layerId -> timeout handle
+// _takClickTimer removed Р Р†Р вЂљРІР‚Сњ dblclick handling uses pop-2 phantom point removal instead
+let _mapTakMode = false;
+let _takAutoLayerVis = { online: true, offline: true };
+let _takCustomLayers = [];   // { id, name, color, visible, items: [] }
+let _takActiveLayerId = null;
+let _takDrawMode = null;     // null | 'marker' | 'circle' | 'ruler'
+let _takDrawPoints = [];
+let _takDrawTempLayer = null;
+let _takFeatureLayers = {};  // layerId -> Leaflet LayerGroup
+let _takIgnoreMapClicksUntil = 0;
+let _takToolPrefs = {};
+let _takEditorPreviewLayer = null;
+
+const _TAK_MARKER_PRESETS = [
+  { id: "waypoint", label: "Waypoint", cotType: "b-m-p-w", color: "#4a9eff", symbol: "dot" },
+  { id: "friendly", label: "Friendly", cotType: "a-f-G-U-C", color: "#4a9eff", symbol: "square" },
+  { id: "hostile", label: "Hostile", cotType: "a-h-G-U-C", color: "#ff5555", symbol: "diamond" },
+  { id: "neutral", label: "Neutral", cotType: "a-n-G-U-C", color: "#4caf50", symbol: "triangle" },
+  { id: "unknown", label: "Unknown", cotType: "a-u-G", color: "#ffc107", symbol: "triangle" },
+  { id: "target", label: "Target", cotType: "a-h-G", color: "#ff9043", symbol: "crosshair" },
+  { id: "sensor", label: "Sensor", cotType: "a-f-G-E-V-C", color: "#00d4d4", symbol: "hex" },
+];
+
+function _takBumpIgnoreMapClick(ms = 350) {
+  _takIgnoreMapClicksUntil = Math.max(_takIgnoreMapClicksUntil, Date.now() + ms);
+}
+
+function _takEnsureEditorPreviewLayer() {
+  if (!_mapInstance) return null;
+  if (!_takEditorPreviewLayer) {
+    _takEditorPreviewLayer = L.layerGroup().addTo(_mapInstance);
+  }
+  return _takEditorPreviewLayer;
+}
+
+function _takClearEditorPreview() {
+  if (_takEditorPreviewLayer) {
+    try { _takEditorPreviewLayer.clearLayers(); } catch (e) {}
+  }
+}
+
+function _takRenderEditorPreview(feature) {
+  if (!_mapInstance || !feature) return;
+  const layer = _takEnsureEditorPreviewLayer();
+  if (!layer) return;
+  _takClearEditorPreview();
+  const preview = _takNormalizeFeature(feature, feature.color || "#4a9eff");
+  const color = preview.color || "#4a9eff";
+  const fillColor = preview.fillColor || color;
+  const dashArray = _takStrokeStyleToDashArray(preview.strokeStyle);
+  let leafletFeature = null;
+  if (preview.type === "marker" && preview.latlng) {
+    const icon = L.divIcon({
+      className: "",
+      html: _takBuildMarkerHtml(preview, "Waypoint"),
+      iconSize: [16, 16],
+      iconAnchor: [8, 8],
+    });
+    leafletFeature = L.marker(preview.latlng, { icon });
+  } else if (preview.type === "polyline" && Array.isArray(preview.latlngs) && preview.latlngs.length >= 2) {
+    leafletFeature = L.polyline(preview.latlngs, {
+      color,
+      weight: Math.max(2, preview.strokeWeight + 1 || 2.5),
+      opacity: 0.9,
+      dashArray,
+    });
+  } else if (preview.type === "polygon" && Array.isArray(preview.latlngs) && preview.latlngs.length >= 3) {
+    leafletFeature = L.polygon(preview.latlngs, {
+      color,
+      weight: Math.max(2, preview.strokeWeight || 2),
+      opacity: 0.9,
+      fillColor,
+      fillOpacity: 0.12,
+      dashArray,
+    });
+  } else if (preview.type === "circle" && preview.latlng && preview.radiusMeters > 0) {
+    leafletFeature = L.featureGroup([
+      L.circle(preview.latlng, {
+        radius: preview.radiusMeters,
+        color,
+        weight: Math.max(2, preview.strokeWeight || 2),
+        opacity: 0.9,
+        fillColor,
+        fillOpacity: 0.12,
+        dashArray,
+      }),
+      L.circleMarker(preview.latlng, { radius: 3, color, weight: 2, fillColor: color, fillOpacity: 1 }),
+    ]);
+  } else if (preview.type === "ruler" && preview.latlng && preview.rangeMeters > 0) {
+    const dest = _takDestinationPoint(preview.latlng, preview.rangeMeters, preview.bearingDeg || 0);
+    if (dest) {
+      leafletFeature = L.featureGroup([
+        L.polyline([preview.latlng, dest], { color, weight: Math.max(2, preview.strokeWeight + 1 || 2.5), opacity: 0.9, dashArray: dashArray || "6 4" }),
+        L.circleMarker(preview.latlng, { radius: 3, color, weight: 2, fillColor: color, fillOpacity: 1 }),
+        L.circleMarker(dest, { radius: 3, color, weight: 2, fillColor: color, fillOpacity: 1 }),
+      ]);
+    }
+  }
+  if (leafletFeature) layer.addLayer(leafletFeature);
+}
+
+function _takGetMapEditor() {
+  if (!_mapInstance) return null;
+  const host = _mapInstance.getContainer();
+  let editor = host.querySelector("#takMapEditor");
+  if (!editor) {
+    editor = document.createElement("div");
+    editor.id = "takMapEditor";
+    editor.className = "tak-map-editor hidden";
+    host.appendChild(editor);
+    _takShieldUiElement(editor);
+  }
+  return editor;
+}
+
+function _takFeatureAnchorLatLng(feature) {
+  if (Array.isArray(feature?.latlng) && feature.latlng.length >= 2) {
+    return { lat: feature.latlng[0], lng: feature.latlng[1] };
+  }
+  if (Array.isArray(feature?.latlngs) && feature.latlngs.length > 0) {
+    const count = feature.latlngs.length;
+    const lat = feature.latlngs.reduce((sum, point) => sum + Number(point[0] || 0), 0) / count;
+    const lng = feature.latlngs.reduce((sum, point) => sum + Number(point[1] || 0), 0) / count;
+    return { lat, lng };
+  }
+  return null;
+}
+
+function _takEscapeHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function _takLoadToolPrefs() {
+  try {
+    const raw = localStorage.getItem("takToolPrefs");
+    if (raw) _takToolPrefs = JSON.parse(raw) || {};
+  } catch (e) {}
+}
+
+function _takSaveToolPrefs() {
+  try {
+    localStorage.setItem("takToolPrefs", JSON.stringify(_takToolPrefs || {}));
+  } catch (e) {}
+}
+
+function _takMarkerPresetById(id) {
+  return _TAK_MARKER_PRESETS.find((preset) => preset.id === id) || _TAK_MARKER_PRESETS[0];
+}
+
+function _takMarkerPresetForCotType(cotType) {
+  const exact = _TAK_MARKER_PRESETS.find((preset) => preset.cotType === cotType);
+  if (exact) return exact;
+  const type = String(cotType || "");
+  if (type.startsWith("a-f-")) return _takMarkerPresetById("friendly");
+  if (type.startsWith("a-h-")) return _takMarkerPresetById("hostile");
+  if (type.startsWith("a-n-")) return _takMarkerPresetById("neutral");
+  if (type.startsWith("a-u-")) return _takMarkerPresetById("unknown");
+  if (type.startsWith("b-m-p-")) return _takMarkerPresetById("waypoint");
+  return _TAK_MARKER_PRESETS[0];
+}
+
+function _takSymbolSvg(symbol, color) {
+  const fill = _takEscapeHtml(color || "#4a9eff");
+  if (symbol === "square") {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="1" fill="${fill}" stroke="rgba(255,255,255,0.72)" stroke-width="1.5"/></svg>`;
+  }
+  if (symbol === "diamond") {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 21 12 12 21 3 12Z" fill="${fill}" stroke="rgba(255,255,255,0.72)" stroke-width="1.5"/></svg>`;
+  }
+  if (symbol === "triangle") {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 20 19H4Z" fill="${fill}" stroke="rgba(255,255,255,0.72)" stroke-width="1.5"/></svg>`;
+  }
+  if (symbol === "crosshair") {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5" fill="none" stroke="${fill}" stroke-width="2"/><path d="M12 3v5M12 16v5M3 12h5M16 12h5" stroke="rgba(255,255,255,0.72)" stroke-width="1.7" stroke-linecap="round"/></svg>`;
+  }
+  if (symbol === "hex") {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8l4 8-4 8H8l-4-8Z" fill="${fill}" stroke="rgba(255,255,255,0.72)" stroke-width="1.5"/></svg>`;
+  }
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5" fill="${fill}" stroke="rgba(255,255,255,0.72)" stroke-width="1.5"/></svg>`;
+}
+
+function _takStrokeStyleToDashArray(style) {
+  const value = String(style || "solid").toLowerCase();
+  if (value === "dashed") return "8 4";
+  if (value === "dotted") return "2 6";
+  return null;
+}
+
+function _takFormatDistance(meters) {
+  const value = Number(meters);
+  if (!Number.isFinite(value) || value <= 0) return "-";
+  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 2)} km`;
+  return `${Math.round(value)} m`;
+}
+
+function _takMidpoint(latlngA, latlngB) {
+  if (!Array.isArray(latlngA) || !Array.isArray(latlngB)) return null;
+  return [
+    (Number(latlngA[0]) + Number(latlngB[0])) / 2,
+    (Number(latlngA[1]) + Number(latlngB[1])) / 2,
+  ];
+}
+
+function _takMeasureLabelMarker(latlng, text) {
+  if (!Array.isArray(latlng) || latlng.length < 2) return null;
+  const icon = L.divIcon({
+    className: "",
+    html: `<div class="tak-measure-label">${_takEscapeHtml(text || "")}</div>`,
+    iconSize: [10, 10],
+    iconAnchor: [5, 5],
+  });
+  return L.marker(latlng, { icon, interactive: false, keyboard: false });
+}
+
+function _takBuildMarkerHtml(feature, fallbackTitle = "Waypoint") {
+  const preset = _takMarkerPresetForCotType(feature.cotType || feature.rawType || "");
+  const color = feature.color || preset.color || "#4a9eff";
+  const symbol = feature.markerSymbol || preset.symbol || "dot";
+  const label = _takEscapeHtml(feature.label || fallbackTitle || "");
+  return `<div class="tak-marker-icon"><div class="tak-marker-symbol">${_takSymbolSvg(symbol, color)}</div><span class="tak-marker-label">${label}</span></div>`;
+}
+
+function _takNormalizeFeature(item, fallbackColor = "#4a9eff") {
+  if (!item) return item;
+  const normalized = { ...item };
+  const preset = normalized.markerPreset
+    ? _takMarkerPresetById(normalized.markerPreset)
+    : _takMarkerPresetForCotType(normalized.cotType || normalized.rawType || "");
+  normalized.color = normalized.color || fallbackColor || preset.color || "#4a9eff";
+  normalized.fillColor = normalized.fillColor || normalized.color;
+  normalized.strokeStyle = normalized.strokeStyle || "solid";
+  normalized.strokeWeight = Number(normalized.strokeWeight) > 0 ? Number(normalized.strokeWeight) : 1;
+  normalized.remarks = normalized.remarks || "";
+  normalized.iconsetPath = normalized.iconsetPath || "";
+  if (normalized.type === "marker") {
+    normalized.markerPreset = normalized.markerPreset || preset.id;
+    const currentPreset = _takMarkerPresetById(normalized.markerPreset);
+    normalized.cotType = normalized.cotType || currentPreset.cotType || "b-m-p-w";
+    normalized.markerSymbol = currentPreset.symbol;
+  }
+  return normalized;
+}
+
+function _takConsumeUiEvent(event, ms = 350) {
+  _takBumpIgnoreMapClick(ms);
+  if (!event) return;
+  if (typeof event.stopPropagation === "function") event.stopPropagation();
+  if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+}
+
+function _takShieldUiElement(element) {
+  if (!element || element.dataset.takShielded === "1") return;
+  element.dataset.takShielded = "1";
+  ["pointerdown", "mousedown", "mouseup", "touchstart", "click", "dblclick"].forEach((type) => {
+    element.addEventListener(type, (event) => {
+      _takConsumeUiEvent(event, type === "click" || type === "dblclick" ? 450 : 250);
+    });
+  });
+}
+
+function _takStatusIcon(state) {
+  if (state === "sending") {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></svg>`;
+  }
+  if (state === "unconfirmed") {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6"/><path d="M17.2 5.8A8 8 0 1 1 6.8 5.8"/><path d="M12 15h.01"/></svg>`;
+  }
+  if (state === "sent") {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+  }
+  if (state === "error") {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>`;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>`;
+}
+
+function _takResendIcon() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15.2-6.36L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15.2 6.36L3 16"/></svg>`;
+}
 
 const _MAP_ROLE_INT = {
   "0": "CLIENT", "1": "CLIENT_MUTE", "2": "ROUTER", "3": "ROUTER_CLIENT",
@@ -2077,6 +2374,7 @@ function openNodesMap() {
         `<button id="mapToggleRadius" class="nodes-map-toggle-btn" title="Signal radius">radius</button>` +
         `<button id="mapToggleLinks" class="nodes-map-toggle-btn" title="Connection lines">links</button>` +
         `<button id="mapToggleRole" class="nodes-map-toggle-btn" title="Color by role">role</button>` +
+        `<button id="mapToggleTak" class="nodes-map-toggle-btn" title="TAK / ATAK layers">TAK</button>` +
         `<div id="mapRadiusStyleControl" class="nodes-map-hops-control hidden" title="Radius style">` +
           `<span class="nodes-map-hops-label">style</span>` +
           `<button id="mapRadiusStyleBtn" class="nodes-map-style-btn nodes-map-style-btn--fill" title="Switch radius style"></button>` +
@@ -2096,8 +2394,8 @@ function openNodesMap() {
       div.id = "mapLinksLegend";
       div.style.display = "none";
       div.innerHTML =
-        `<div class="nodes-map-legend-row"><span class="nodes-map-legend-line" style="background:#4caf50"></span> Strong SNR (≥5 dB)</div>` +
-        `<div class="nodes-map-legend-row"><span class="nodes-map-legend-line" style="background:#ffc107"></span> Medium SNR (0–5 dB)</div>` +
+        `<div class="nodes-map-legend-row"><span class="nodes-map-legend-line" style="background:#4caf50"></span> Strong SNR (>=5 dB)</div>` +
+        `<div class="nodes-map-legend-row"><span class="nodes-map-legend-line" style="background:#ffc107"></span> Medium SNR (0-5 dB)</div>` +
         `<div class="nodes-map-legend-row"><span class="nodes-map-legend-line" style="background:#ff7043"></span> Weak SNR (&lt;0 dB)</div>` +
         `<div class="nodes-map-legend-row"><span class="nodes-map-legend-line" style="background:#4a9eff"></span> No SNR data</div>` +
         `<div class="nodes-map-legend-divider"></div>` +
@@ -2117,6 +2415,55 @@ function openNodesMap() {
       return div;
     };
     roleLegendControl.addTo(_mapInstance);
+
+    const takPanelControl = L.control({ position: "topleft" });
+    takPanelControl.onAdd = function () {
+      const div = L.DomUtil.create("div", "tak-panel hidden");
+      div.id = "takPanel";
+      div.innerHTML =
+        `<div class="tak-panel-header">` +
+          `<span class="tak-panel-title">TAK Layers</span>` +
+          `<button id="takPanelCloseBtn" class="tak-panel-close" title="Close TAK panel" aria-label="Close TAK panel">` +
+            `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12"/><path d="M18 6 6 18"/></svg>` +
+          `</button>` +
+        `</div>` +
+        `<div class="tak-section">` +
+          `<div class="tak-section-title">Network Layers</div>` +
+          `<div id="takAutoLayers" class="tak-auto-layers"></div>` +
+        `</div>` +
+        `<div class="tak-section">` +
+          `<div class="tak-section-title">` +
+            `<span>Custom Layers</span>` +
+            `<button id="takAddLayerBtn" class="tak-mini-btn" title="Create new layer">+ New</button>` +
+          `</div>` +
+          `<div id="takCustomLayersList" class="tak-custom-layers"></div>` +
+        `</div>` +
+        `<div class="tak-section" id="takDrawSection" style="display:none">` +
+          `<div class="tak-section-title">Draw</div>` +
+          `<div class="tak-draw-toolbar">` +
+            `<button id="takDrawMarker" class="tak-draw-btn" title="Add waypoint">` +
+              `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg> Waypoint` +
+            `</button>` +
+            `<button id="takDrawRuler" class="tak-draw-btn" title="Draw ruler">` +
+              `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 20 20 4"/><path d="M14 4l6 6"/><path d="M6 12l2 2"/><path d="M9 9l2 2"/><path d="M12 6l2 2"/></svg> Ruler` +
+            `</button>` +
+            `<button id="takDrawCircle" class="tak-draw-btn" title="Draw circle">` +
+              `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="8"/></svg> Circle` +
+            `</button>` +
+          `</div>` +
+          `<div id="takDrawHint" class="tak-draw-hint hidden"></div>` +
+          `<div class="tak-draw-actions">` +
+            `<button id="takDrawFinish" class="tak-draw-finish hidden">Finish</button>` +
+            `<button id="takDrawCancel" class="tak-draw-cancel hidden">Cancel</button>` +
+          `</div>` +
+        `</div>` +
+        `<div id="takInlineDialog" class="tak-inline-dialog hidden"></div>`;
+      L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.disableScrollPropagation(div);
+      _takShieldUiElement(div);
+      return div;
+    };
+    takPanelControl.addTo(_mapInstance);
 
     document.getElementById("mapToggleTooltips").addEventListener("click", function () {
       _mapShowTooltips = !_mapShowTooltips;
@@ -2157,11 +2504,21 @@ function openNodesMap() {
       _mapHoverMaxHops = parseInt(this.value);
       document.getElementById("mapHopsVal").textContent = _mapHoverMaxHops;
     });
+    document.getElementById("mapToggleTak").addEventListener("click", function () {
+      if (_mapTakMode) {
+        _takClosePanel();
+        this.classList.remove("nodes-map-toggle-btn--active");
+      } else {
+        _takOpenPanel();
+        this.classList.add("nodes-map-toggle-btn--active");
+      }
+    });
   }
 
   // Force Leaflet to recalculate size after the modal becomes visible
   requestAnimationFrame(() => {
     _mapInstance.invalidateSize();
+    _takRenderAllIncomingFeatures();
     _renderMapNodes();
   });
 }
@@ -2173,6 +2530,1015 @@ function closeNodesMap() {
   if (panel) panel.classList.remove("modal-panel--fullscreen");
   const icon = document.getElementById("nodesMapExpandIcon");
   if (icon) icon.innerHTML = '<path d="M1 1h4v1.5H2.5V4H1V1zm6 0h4v3h-1.5V2.5H7V1zM1 8h1.5v2.5H5V12H1V8zm8.5 2.5H7V12h4V8H9.5v2.5z"/>';
+}
+
+// Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ TAK / ATAK Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
+
+function _takSetLayerStatus(layerId, state, text = "") {
+  if (!layerId) return;
+  if (_takLayerSendTimers.has(layerId)) {
+    clearTimeout(_takLayerSendTimers.get(layerId));
+    _takLayerSendTimers.delete(layerId);
+  }
+  _takLayerSendState.set(layerId, { state, text });
+  if (_mapTakMode) _takRefreshPanel();
+}
+
+function _takPostFeature(item, color, layerId = _takActiveLayerId) {
+  const feature = _takNormalizeFeature(item, color || "#4a9eff");
+  const body = {
+    type: feature.type,
+    label: feature.label || "",
+    color: feature.color || color || "#4a9eff",
+    fillColor: feature.fillColor || feature.color || color || "#4a9eff",
+    strokeStyle: feature.strokeStyle || "solid",
+    strokeWeight: feature.strokeWeight || 1,
+    remarks: feature.remarks || "",
+    cotType: feature.cotType || "",
+    iconsetPath: feature.iconsetPath || "",
+    markerPreset: feature.markerPreset || "",
+  };
+  if (feature.type === "marker") body.latlng = feature.latlng;
+  else if (feature.type === "ruler") {
+    body.latlng = feature.latlng;
+    body.rangeMeters = feature.rangeMeters;
+    body.bearingDeg = feature.bearingDeg;
+  }
+  else if (feature.type === "circle") {
+    body.latlng = feature.latlng;
+    body.radiusMeters = feature.radiusMeters;
+  } else if (feature.type === "ellipse") {
+    body.latlng = feature.latlng;
+    body.majorMeters = feature.majorMeters;
+    body.minorMeters = feature.minorMeters;
+    body.angleDeg = feature.angleDeg;
+  } else body.latlngs = feature.latlngs;
+  // Generate uid client-side and register BEFORE fetch to avoid race with SSE
+  const uid = String(item?.uid || feature.uid || `tak-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`);
+  feature.uid = uid;
+  if (item && typeof item === "object") item.uid = uid;
+  body.uid = uid;
+  _takSaveToStorage();
+  const isLargeGeometry =
+    item.type === "circle"
+    || item.type === "ellipse"
+    || ((item.type === "polyline" || item.type === "polygon") && Array.isArray(item.latlngs) && item.latlngs.length > 8);
+  const sendTimer = setTimeout(() => {
+    const pending = _takPendingSends.get(uid);
+    if (pending) {
+      _takPendingSends.delete(uid);
+      _takSetLayerStatus(pending.layerId, "error", "No response from mesh");
+    }
+  }, isLargeGeometry ? 180000 : 90000);
+  _takPendingSends.set(uid, { timer: sendTimer, layerId });
+
+  _takSetLayerStatus(layerId, "sending", isLargeGeometry ? "Mesh transfer in progress..." : "Sending...");
+  fetch("/api/tak/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then(r => r.json()).then(data => {
+    if (!data.ok) {
+      const pending = _takPendingSends.get(uid);
+      if (pending) clearTimeout(pending.timer);
+      _takPendingSends.delete(uid);
+      _takSetLayerStatus(layerId, "error", (data.error || "Send failed"));
+    }
+    // If ok=true, wait for SSE tak_send_status (uid already stored)
+  }).catch(() => {
+    const pending = _takPendingSends.get(uid);
+    if (pending) clearTimeout(pending.timer);
+    _takPendingSends.delete(uid);
+    _takSetLayerStatus(layerId, "error", "Not connected");
+  });
+}
+
+function _takApproxEllipseLatLngs(center, majorMeters, minorMeters, angleDeg = 0, segments = 48) {
+  if (!Array.isArray(center) || center.length < 2) return [];
+  const lat = Number(center[0]);
+  const lon = Number(center[1]);
+  const major = Math.max(0, Number(majorMeters) || 0);
+  const minor = Math.max(0, Number(minorMeters) || 0);
+  if (!isFinite(lat) || !isFinite(lon) || major <= 0 || minor <= 0) return [];
+  const angle = (Number(angleDeg) || 0) * Math.PI / 180;
+  const mPerDegLat = 111320;
+  const mPerDegLon = Math.max(1, 111320 * Math.cos(lat * Math.PI / 180));
+  const points = [];
+  for (let i = 0; i < segments; i += 1) {
+    const t = (2 * Math.PI * i) / segments;
+    const x = major * Math.cos(t);
+    const y = minor * Math.sin(t);
+    const xr = x * Math.cos(angle) - y * Math.sin(angle);
+    const yr = x * Math.sin(angle) + y * Math.cos(angle);
+    points.push([lat + (yr / mPerDegLat), lon + (xr / mPerDegLon)]);
+  }
+  return points;
+}
+
+function _takLatLngOffsetMeters(center, eastMeters, northMeters) {
+  if (!Array.isArray(center) || center.length < 2) return null;
+  const lat = Number(center[0]);
+  const lon = Number(center[1]);
+  const mPerDegLat = 111320;
+  const mPerDegLon = Math.max(1, 111320 * Math.cos(lat * Math.PI / 180));
+  return [lat + (northMeters / mPerDegLat), lon + (eastMeters / mPerDegLon)];
+}
+
+function _takDestinationPoint(center, rangeMeters, bearingDeg) {
+  const distance = Number(rangeMeters);
+  const bearing = (Number(bearingDeg) || 0) * Math.PI / 180;
+  if (!Array.isArray(center) || center.length < 2 || !(distance > 0)) return null;
+  const east = distance * Math.sin(bearing);
+  const north = distance * Math.cos(bearing);
+  return _takLatLngOffsetMeters(center, east, north);
+}
+
+function _bearingDegrees(lat1, lon1, lat2, lon2) {
+  const phi1 = Number(lat1) * Math.PI / 180;
+  const phi2 = Number(lat2) * Math.PI / 180;
+  const dLon = (Number(lon2) - Number(lon1)) * Math.PI / 180;
+  const y = Math.sin(dLon) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon);
+  const deg = Math.atan2(y, x) * 180 / Math.PI;
+  return (deg + 360) % 360;
+}
+
+function _takRenderAllIncomingFeatures() {
+  if (!_mapInstance || !_mapTakMode) return;
+  _takIncomingFeatures.forEach((feature) => _takRenderIncomingFeature(feature));
+}
+
+function _takRemoveIncomingFeature(uid) {
+  if (!uid) return;
+  _takIncomingFeatures.delete(uid);
+  if (_takIncomingMap.has(uid)) {
+    const layer = _takIncomingMap.get(uid);
+    _takIncomingMap.delete(uid);
+    if (_takIncomingLayer && layer) {
+      try { _takIncomingLayer.removeLayer(layer); } catch (e) {}
+    }
+  }
+}
+
+function _takRemoveLocalFeatureByUid(uid) {
+  if (!uid) return false;
+  let changed = false;
+  _takCustomLayers.forEach((layer) => {
+    const before = Array.isArray(layer.items) ? layer.items.length : 0;
+    layer.items = Array.isArray(layer.items)
+      ? layer.items.filter((item) => String(item?.uid || "") !== uid)
+      : [];
+    if (layer.items.length !== before) {
+      _takRenderLayer(layer);
+      changed = true;
+    }
+  });
+  if (changed) _takSaveToStorage();
+  return changed;
+}
+
+function _takHandleDeleteFeature(feature) {
+  const uid = String(feature?.uid || "");
+  if (!uid) return;
+  _takRemoveIncomingFeature(uid);
+  _takRemoveLocalFeatureByUid(uid);
+}
+
+function _takRenderIncomingFeature(feature) {
+  if (!feature || !feature.uid) return;
+  if (feature.type === "delete") {
+    _takHandleDeleteFeature(feature);
+    return;
+  }
+  const normalizedFeature = _takNormalizeFeature(feature, feature.color || "#ff9043");
+  _takIncomingFeatures.set(normalizedFeature.uid, normalizedFeature);
+  if (!_mapInstance || !_mapTakMode) return;
+  if (!_takIncomingLayer) {
+    _takIncomingLayer = L.layerGroup().addTo(_mapInstance);
+  }
+  // Remove old layer for this uid if exists
+  if (_takIncomingMap.has(normalizedFeature.uid)) {
+    _takIncomingLayer.removeLayer(_takIncomingMap.get(normalizedFeature.uid));
+  }
+  const color = normalizedFeature.color || "#ff9043";
+  const dashArray = _takStrokeStyleToDashArray(normalizedFeature.strokeStyle);
+  const senderHtml = normalizedFeature.sender ? `<div class="nodes-map-popup-row">from: ${_takEscapeHtml(normalizedFeature.sender)}</div>` : "";
+  const metadataOnlyHtml = normalizedFeature.metadataOnly ? `<div class="nodes-map-popup-row">geometry: metadata only</div>` : "";
+  const remarksHtml = normalizedFeature.remarks ? `<div class="nodes-map-popup-row">${_takEscapeHtml(normalizedFeature.remarks)}</div>` : "";
+  const typeHtml = normalizedFeature.rawType ? `<div class="nodes-map-popup-row">type: ${_takEscapeHtml(normalizedFeature.rawType)}</div>` : "";
+  const circleSizeHtml = normalizedFeature.type === "circle" && normalizedFeature.radiusMeters > 0
+    ? `<div class="nodes-map-popup-row">radius: ${_takEscapeHtml(_takFormatDistance(normalizedFeature.radiusMeters))}</div>`
+    : "";
+  let leafletFeature = null;
+  const makeCenterMarker = () => L.circleMarker(normalizedFeature.latlng, { radius: 3, color, weight: 2, fillColor: color, fillOpacity: 1 });
+  const makeLabeledMarker = (title) => {
+    const icon = L.divIcon({
+      className: "",
+      html: _takBuildMarkerHtml(normalizedFeature, title),
+      iconSize: [16, 16], iconAnchor: [8, 8], popupAnchor: [0, -10],
+    });
+    return L.marker(normalizedFeature.latlng, { icon });
+  };
+  const bindPopup = (layer, title) => {
+    if (!layer || (!normalizedFeature.label && !normalizedFeature.sender && !normalizedFeature.metadataOnly && !normalizedFeature.remarks && !normalizedFeature.rawType && !circleSizeHtml)) return;
+    layer.bindPopup(
+      `<div class="nodes-map-popup"><div class="nodes-map-popup-name">${_takEscapeHtml(normalizedFeature.label || title)}</div>${senderHtml}${remarksHtml}${typeHtml}${circleSizeHtml}${metadataOnlyHtml}</div>`,
+      { closeButton: false, autoPan: false },
+    );
+  };
+  if (normalizedFeature.type === "marker" && normalizedFeature.latlng) {
+    leafletFeature = makeLabeledMarker("Waypoint");
+    bindPopup(leafletFeature, "Waypoint");
+  } else if (normalizedFeature.type === "polyline" && normalizedFeature.latlngs?.length >= 2) {
+    leafletFeature = L.polyline(normalizedFeature.latlngs, { color, weight: Math.max(2, normalizedFeature.strokeWeight + 1 || 2.5), opacity: 0.9, dashArray: dashArray || "8 4" });
+    bindPopup(leafletFeature, "Route");
+  } else if (normalizedFeature.type === "polyline" && normalizedFeature.latlng) {
+    leafletFeature = makeLabeledMarker("Route");
+    bindPopup(leafletFeature, "Route");
+  } else if (normalizedFeature.type === "polygon" && normalizedFeature.latlngs?.length >= 3) {
+    leafletFeature = L.polygon(normalizedFeature.latlngs, { color, weight: Math.max(2, normalizedFeature.strokeWeight || 2), opacity: 0.9, fillColor: normalizedFeature.fillColor || color, fillOpacity: 0.1, dashArray: dashArray || "8 4" });
+    bindPopup(leafletFeature, "Area");
+  } else if (normalizedFeature.type === "polygon" && normalizedFeature.latlng) {
+    leafletFeature = makeLabeledMarker("Area");
+    bindPopup(leafletFeature, "Area");
+  } else if (normalizedFeature.type === "circle" && normalizedFeature.latlng && normalizedFeature.radiusMeters > 0) {
+    const circle = L.circle(normalizedFeature.latlng, { radius: normalizedFeature.radiusMeters, color, weight: Math.max(2, normalizedFeature.strokeWeight || 2), opacity: 0.9, fillColor: normalizedFeature.fillColor || color, fillOpacity: 0.1, dashArray: dashArray || "8 4" });
+    const radiusLabel = _takMeasureLabelMarker(normalizedFeature.latlng, `R: ${_takFormatDistance(normalizedFeature.radiusMeters)}`);
+    leafletFeature = L.featureGroup([circle, makeCenterMarker(), radiusLabel].filter(Boolean));
+    bindPopup(leafletFeature, "Circle");
+  } else if (normalizedFeature.type === "ellipse" && normalizedFeature.latlng && normalizedFeature.majorMeters > 0 && normalizedFeature.minorMeters > 0) {
+    const ellipsePoints = _takApproxEllipseLatLngs(normalizedFeature.latlng, normalizedFeature.majorMeters, normalizedFeature.minorMeters, normalizedFeature.angleDeg || 0);
+    if (ellipsePoints.length >= 12) {
+      leafletFeature = L.featureGroup([
+        L.polygon(ellipsePoints, { color, weight: Math.max(2, normalizedFeature.strokeWeight || 2), opacity: 0.9, fillColor: normalizedFeature.fillColor || color, fillOpacity: 0.1, dashArray: dashArray || "8 4" }),
+        makeCenterMarker(),
+      ]);
+      bindPopup(leafletFeature, "Ellipse");
+    }
+  } else if (normalizedFeature.type === "rectangle" && normalizedFeature.latlngs?.length >= 4) {
+    leafletFeature = L.featureGroup([
+      L.polygon(normalizedFeature.latlngs, { color, weight: Math.max(2, normalizedFeature.strokeWeight || 2), opacity: 0.9, fillColor: normalizedFeature.fillColor || color, fillOpacity: 0.1, dashArray: dashArray || "8 4" }),
+      normalizedFeature.latlng ? makeCenterMarker() : L.layerGroup(),
+    ]);
+    bindPopup(leafletFeature, "Rectangle");
+  } else if (normalizedFeature.type === "rectangle" && normalizedFeature.latlng) {
+    leafletFeature = makeLabeledMarker("Rectangle");
+    bindPopup(leafletFeature, "Rectangle");
+  } else if (normalizedFeature.type === "ruler" && normalizedFeature.latlng && normalizedFeature.rangeMeters > 0) {
+    const dest = _takDestinationPoint(normalizedFeature.latlng, normalizedFeature.rangeMeters, normalizedFeature.bearingDeg || 0);
+    if (dest) {
+      const labelPoint = _takMidpoint(normalizedFeature.latlng, dest);
+      const lengthLabel = _takMeasureLabelMarker(labelPoint, _takFormatDistance(normalizedFeature.rangeMeters));
+      leafletFeature = L.featureGroup([
+        L.polyline([normalizedFeature.latlng, dest], { color, weight: Math.max(2, normalizedFeature.strokeWeight + 1 || 2.5), opacity: 0.9, dashArray: dashArray || "6 4" }),
+        makeCenterMarker(),
+        L.circleMarker(dest, { radius: 3, color, weight: 2, fillColor: color, fillOpacity: 1 }),
+        lengthLabel,
+      ].filter(Boolean));
+      bindPopup(leafletFeature, "Ruler");
+    }
+  }
+  if (leafletFeature) {
+    _takIncomingLayer.addLayer(leafletFeature);
+    _takIncomingMap.set(normalizedFeature.uid, leafletFeature);
+  }
+}
+
+function _takLoadFromStorage() {
+  try {
+    const raw = localStorage.getItem("takCustomLayers");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        _takCustomLayers = parsed.map((layer) => ({
+          ...layer,
+          items: Array.isArray(layer.items)
+            ? layer.items.map((item) => _takNormalizeFeature(item, layer.color || "#4a9eff"))
+            : [],
+        }));
+      }
+    }
+  } catch (e) {}
+}
+
+function _takSaveToStorage() {
+  try {
+    const data = _takCustomLayers.map(l => ({
+      id: l.id, name: l.name, color: l.color, visible: l.visible, items: l.items,
+    }));
+    localStorage.setItem("takCustomLayers", JSON.stringify(data));
+  } catch (e) {}
+}
+
+function _takPrompt(label, placeholder, onOk, onCancel) {
+  const dialog = document.getElementById("takInlineDialog");
+  if (!dialog) { if (onOk) onOk(""); return; }
+  _takBumpIgnoreMapClick(500);
+  dialog.innerHTML =
+    `<div class="tak-dialog-label">${label}</div>` +
+    `<input id="takDialogInput" class="tak-dialog-input" type="text" placeholder="${placeholder}" autocomplete="off">` +
+    `<div class="tak-dialog-actions">` +
+      `<button id="takDialogOk" class="tak-dialog-ok">OK</button>` +
+      `<button id="takDialogCancel" class="tak-dialog-cancel-btn">Cancel</button>` +
+    `</div>`;
+  dialog.classList.remove("hidden");
+  _takShieldUiElement(dialog);
+  const input = document.getElementById("takDialogInput");
+  input.focus();
+  function close() { dialog.classList.add("hidden"); dialog.innerHTML = ""; }
+  document.getElementById("takDialogOk").addEventListener("click", (e) => { _takConsumeUiEvent(e, 500); const v = input.value; close(); if (onOk) onOk(v); });
+  dialog.querySelector(".tak-dialog-cancel-btn").addEventListener("click", (e) => { _takConsumeUiEvent(e, 500); close(); if (onCancel) onCancel(); });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); const v = input.value; close(); if (onOk) onOk(v); }
+    if (e.key === "Escape") { e.preventDefault(); close(); if (onCancel) onCancel(); }
+  });
+}
+
+function _takDeleteFeature(item) {
+  if (!item || !item.uid) return Promise.resolve({ ok: true, skipped: true });
+  const feature = _takNormalizeFeature(item, item.color || "#4a9eff");
+  return fetch("/api/tak/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      uid: feature.uid,
+      type: feature.type,
+      rawType: feature.rawType || "",
+      cotType: feature.cotType || "",
+      latlng: feature.latlng || null,
+      radiusMeters: feature.radiusMeters ?? null,
+      rangeMeters: feature.rangeMeters ?? null,
+      bearingDeg: feature.bearingDeg ?? null,
+    }),
+  }).then((r) => r.json()).catch(() => ({ ok: false }));
+}
+
+function _takFeatureTypeLabel(type) {
+  if (type === "marker") return "Waypoint";
+  if (type === "circle") return "Circle";
+  if (type === "ruler") return "Ruler";
+  return "Object";
+}
+
+function _takDeleteLayerItem(layer, item) {
+  if (!layer || !item) return;
+  const doDelete = () => {
+    if (item.uid) _takDeleteFeature(item);
+    layer.items = Array.isArray(layer.items)
+      ? layer.items.filter((entry) => entry !== item && String(entry?.uid || "") !== String(item.uid || ""))
+      : [];
+    _takRenderLayer(layer);
+    _takSaveToStorage();
+    _takRefreshPanel();
+  };
+  _takConfirm(`Delete ${_takFeatureTypeLabel(item.type).toLowerCase()} "${_takEscapeHtml(item.label || _takFeatureTypeLabel(item.type))}"?`, doDelete);
+}
+
+function _takFeatureDialog(type, defaults, onOk, onCancel, options = {}) {
+  const useMapPopover = !!(options.anchorLatLng && _mapInstance);
+  const dialog = useMapPopover ? _takGetMapEditor() : document.getElementById("takInlineDialog");
+  if (!dialog) { if (onOk) onOk(defaults || {}); return; }
+  _takBumpIgnoreMapClick(500);
+  const safeType = String(type || "marker");
+  const stored = _takToolPrefs[safeType] || {};
+  const value = _takNormalizeFeature({ ...stored, ...defaults }, defaults?.color || "#4a9eff");
+  const preset = _takMarkerPresetForCotType(value.cotType || value.rawType || "");
+  const isMarker = safeType === "marker";
+  const isRuler = safeType === "ruler";
+  const isFilledShape = safeType === "circle" || safeType === "ellipse" || safeType === "rectangle";
+  const title = isMarker ? "Waypoint / Marker" : isRuler ? "Ruler" : "Circle";
+  const presetOptions = _TAK_MARKER_PRESETS.map((item) => (
+    `<option value="${item.id}"${item.id === (value.markerPreset || preset.id) ? " selected" : ""}>${item.label}</option>`
+  )).join("");
+
+  dialog.className = useMapPopover ? "tak-map-editor tak-map-editor--compact" : "tak-inline-dialog";
+  dialog.innerHTML =
+    `<div class="tak-dialog-label">TAK ${_takEscapeHtml(title)} properties</div>` +
+    (isMarker ? `<div id="takFeaturePreview" class="tak-feature-preview"></div>` : "") +
+    `<div class="tak-form-grid">` +
+      (isMarker
+        ? `<label class="tak-form-field"><span>Type</span><select id="takFeaturePreset" class="tak-dialog-select">${presetOptions}</select></label>`
+        : "") +
+      `<label class="tak-form-field"><span>Label</span><input id="takFeatureLabel" class="tak-dialog-input" type="text" value="${_takEscapeHtml(value.label || "")}" placeholder="${isMarker ? "WPT" : "Optional"}" autocomplete="off"></label>` +
+      `<label class="tak-form-field"><span>Color</span><input id="takFeatureColor" class="tak-dialog-input tak-dialog-color" type="color" value="${_takEscapeHtml(value.color || "#4a9eff")}"></label>` +
+      (isFilledShape
+        ? `<label class="tak-form-field"><span>Fill</span><input id="takFeatureFillColor" class="tak-dialog-input tak-dialog-color" type="color" value="${_takEscapeHtml(value.fillColor || value.color || "#4a9eff")}"></label>`
+        : "") +
+      `<label class="tak-form-field"><span>Style</span><select id="takFeatureStrokeStyle" class="tak-dialog-select"><option value="solid"${value.strokeStyle === "solid" ? " selected" : ""}>Solid</option><option value="dashed"${value.strokeStyle === "dashed" ? " selected" : ""}>Dashed</option><option value="dotted"${value.strokeStyle === "dotted" ? " selected" : ""}>Dotted</option></select></label>` +
+      `<label class="tak-form-field"><span>Width</span><input id="takFeatureStrokeWeight" class="tak-dialog-input" type="number" min="1" max="8" step="0.5" value="${_takEscapeHtml(String(value.strokeWeight || 1))}"></label>` +
+      (!useMapPopover && isMarker
+        ? `<label class="tak-form-field tak-form-field--wide"><span>Iconset Path</span><input id="takFeatureIconsetPath" class="tak-dialog-input" type="text" value="${_takEscapeHtml(value.iconsetPath || "")}" placeholder="optional ATAK iconset path"></label>`
+          + `<label class="tak-form-field tak-form-field--wide"><span>CoT Type</span><input id="takFeatureCotType" class="tak-dialog-input" type="text" value="${_takEscapeHtml(value.cotType || preset.cotType || "b-m-p-w")}" placeholder="b-m-p-w"></label>`
+        : `<input id="takFeatureCotType" type="hidden" value="${_takEscapeHtml(value.cotType || preset.cotType || "b-m-p-w")}"><input id="takFeatureIconsetPath" type="hidden" value="${_takEscapeHtml(value.iconsetPath || "")}">`) +
+      `<label class="tak-form-field tak-form-field--wide"><span>Remarks</span><textarea id="takFeatureRemarks" class="tak-dialog-textarea" rows="3" placeholder="optional metadata / notes">${_takEscapeHtml(value.remarks || "")}</textarea></label>` +
+    `</div>` +
+    `<div class="tak-dialog-actions">` +
+      `<button id="takDialogOk" class="tak-dialog-ok">Save</button>` +
+      `<button id="takDialogCancel" class="tak-dialog-cancel-btn">Cancel</button>` +
+    `</div>`;
+  dialog.classList.remove("hidden");
+  if (useMapPopover) {
+    const point = _mapInstance.latLngToContainerPoint(options.anchorLatLng);
+    const host = _mapInstance.getContainer();
+    const placeDialog = () => {
+      const width = dialog.offsetWidth || 246;
+      const height = dialog.offsetHeight || 200;
+      const left = Math.max(8, Math.min(host.clientWidth - width - 8, point.x + 14));
+      const top = Math.max(8, Math.min(host.clientHeight - height - 8, point.y - 18));
+      dialog.style.left = `${left}px`;
+      dialog.style.top = `${top}px`;
+    };
+    placeDialog();
+    requestAnimationFrame(placeDialog);
+  } else {
+    dialog.style.left = "";
+    dialog.style.top = "";
+  }
+  _takShieldUiElement(dialog);
+
+  const labelInput = document.getElementById("takFeatureLabel");
+  const presetInput = document.getElementById("takFeaturePreset");
+  const colorInput = document.getElementById("takFeatureColor");
+  const cotTypeInput = document.getElementById("takFeatureCotType");
+  const preview = document.getElementById("takFeaturePreview");
+  if (labelInput) labelInput.focus();
+
+  const syncPreview = () => {
+    const previewFeature = _takNormalizeFeature({
+      ...defaults,
+      type: safeType,
+      label: labelInput?.value?.trim() || value.label || "Waypoint",
+      color: colorInput?.value || value.color || "#4a9eff",
+      fillColor: document.getElementById("takFeatureFillColor")?.value || value.fillColor || value.color || "#4a9eff",
+      strokeStyle: document.getElementById("takFeatureStrokeStyle")?.value || value.strokeStyle || "solid",
+      strokeWeight: Number(document.getElementById("takFeatureStrokeWeight")?.value || value.strokeWeight || 1),
+      cotType: cotTypeInput?.value?.trim() || value.cotType || preset.cotType,
+      markerPreset: presetInput?.value || value.markerPreset || preset.id,
+      markerSymbol: _takMarkerPresetById(presetInput?.value || value.markerPreset || preset.id).symbol,
+    }, value.color || "#4a9eff");
+    if (preview) {
+      preview.innerHTML = `<span class="tak-feature-preview-title">Preview</span>${_takBuildMarkerHtml(previewFeature, "Waypoint")}`;
+    }
+    if (useMapPopover && (safeType === "marker" || safeType === "circle" || safeType === "ruler")) {
+      _takRenderEditorPreview(previewFeature);
+    }
+  };
+
+  if (presetInput && colorInput && cotTypeInput) {
+    const syncPreset = () => {
+      const selectedPreset = _takMarkerPresetById(presetInput.value);
+      if (cotTypeInput.dataset.manual !== "1") cotTypeInput.value = selectedPreset.cotType;
+      if (colorInput.dataset.manual !== "1") colorInput.value = selectedPreset.color;
+      syncPreview();
+    };
+    presetInput.addEventListener("change", syncPreset);
+    colorInput.addEventListener("input", () => { colorInput.dataset.manual = "1"; syncPreview(); });
+    cotTypeInput.addEventListener("input", () => { cotTypeInput.dataset.manual = "1"; syncPreview(); });
+  }
+  if (labelInput) labelInput.addEventListener("input", syncPreview);
+  const fillInput = document.getElementById("takFeatureFillColor");
+  const styleInput = document.getElementById("takFeatureStrokeStyle");
+  const weightInput = document.getElementById("takFeatureStrokeWeight");
+  if (fillInput) fillInput.addEventListener("input", syncPreview);
+  if (styleInput) styleInput.addEventListener("change", syncPreview);
+  if (weightInput) weightInput.addEventListener("input", syncPreview);
+  syncPreview();
+
+  function close() {
+    dialog.classList.add("hidden");
+    if (useMapPopover) _takClearEditorPreview();
+    dialog.innerHTML = "";
+  }
+
+  document.getElementById("takDialogOk").addEventListener("click", (e) => {
+    _takConsumeUiEvent(e, 500);
+    const result = _takNormalizeFeature({
+      ...defaults,
+      label: document.getElementById("takFeatureLabel")?.value?.trim() || defaults?.label || "",
+      color: document.getElementById("takFeatureColor")?.value || defaults?.color || "#4a9eff",
+      fillColor: document.getElementById("takFeatureFillColor")?.value || document.getElementById("takFeatureColor")?.value || defaults?.fillColor || defaults?.color || "#4a9eff",
+      strokeStyle: document.getElementById("takFeatureStrokeStyle")?.value || defaults?.strokeStyle || "solid",
+      strokeWeight: Number(document.getElementById("takFeatureStrokeWeight")?.value || defaults?.strokeWeight || 1),
+      remarks: document.getElementById("takFeatureRemarks")?.value?.trim() || "",
+      markerPreset: document.getElementById("takFeaturePreset")?.value || defaults?.markerPreset || preset.id,
+      markerSymbol: _takMarkerPresetById(document.getElementById("takFeaturePreset")?.value || defaults?.markerPreset || preset.id).symbol,
+      cotType: document.getElementById("takFeatureCotType")?.value?.trim() || defaults?.cotType || preset.cotType,
+      iconsetPath: document.getElementById("takFeatureIconsetPath")?.value?.trim() || "",
+    }, defaults?.color || "#4a9eff");
+    _takToolPrefs[safeType] = {
+      label: result.label || "",
+      color: result.color || "#4a9eff",
+      fillColor: result.fillColor || result.color || "#4a9eff",
+      strokeStyle: result.strokeStyle || "solid",
+      strokeWeight: result.strokeWeight || 1,
+      remarks: result.remarks || "",
+      markerPreset: result.markerPreset || preset.id,
+      cotType: result.cotType || preset.cotType,
+      iconsetPath: result.iconsetPath || "",
+    };
+    _takSaveToolPrefs();
+    close();
+    if (onOk) onOk(result);
+  });
+  document.getElementById("takDialogCancel").addEventListener("click", (e) => {
+    _takConsumeUiEvent(e, 500);
+    close();
+    if (onCancel) onCancel();
+  });
+}
+
+function _takConfirm(message, onOk, onCancel) {
+  const dialog = document.getElementById("takInlineDialog");
+  if (!dialog) { if (onOk) onOk(); return; }
+  _takBumpIgnoreMapClick(500);
+  dialog.innerHTML =
+    `<div class="tak-dialog-label">${message}</div>` +
+    `<div class="tak-dialog-actions">` +
+      `<button id="takDialogOk" class="tak-dialog-ok tak-dialog-ok--danger">Delete</button>` +
+      `<button class="tak-dialog-cancel-btn">Cancel</button>` +
+    `</div>`;
+  dialog.classList.remove("hidden");
+  _takShieldUiElement(dialog);
+  function close() { dialog.classList.add("hidden"); dialog.innerHTML = ""; }
+  document.getElementById("takDialogOk").addEventListener("click", (e) => { _takConsumeUiEvent(e, 500); close(); if (onOk) onOk(); });
+  dialog.querySelector(".tak-dialog-cancel-btn").addEventListener("click", (e) => { _takConsumeUiEvent(e, 500); close(); if (onCancel) onCancel(); });
+}
+
+function _takResendLayer(layer) {
+  if (!layer || !Array.isArray(layer.items) || layer.items.length === 0) return;
+  const supportedItems = layer.items.filter((item) => ["marker", "circle", "ruler"].includes(item?.type));
+  if (supportedItems.length === 0) {
+    _takSetLayerStatus(layer.id, "error", "Layer has no supported TAK items");
+    return;
+  }
+  _takSetLayerStatus(layer.id, "sending", "Resending...");
+  supportedItems.forEach((item, index) => {
+    setTimeout(() => {
+      _takPostFeature(item, item?.color || layer.color, layer.id);
+    }, index * 220);
+  });
+}
+
+function _takOpenPanel() {
+  _mapTakMode = true;
+  _takLoadFromStorage();
+  _takLoadToolPrefs();
+  const panel = document.getElementById("takPanel");
+  if (panel) panel.classList.remove("hidden");
+  const closeBtn = document.getElementById("takPanelCloseBtn");
+  if (closeBtn && !closeBtn.dataset.bound) {
+    closeBtn.dataset.bound = "1";
+    closeBtn.addEventListener("click", (e) => {
+      _takConsumeUiEvent(e, 350);
+      _takClosePanel();
+      const toggleBtn = document.getElementById("mapToggleTak");
+      if (toggleBtn) toggleBtn.classList.remove("nodes-map-toggle-btn--active");
+    });
+  }
+  _takRenderAllCustomLayers();
+  _takRenderAllIncomingFeatures();
+  _takRefreshPanel();
+  _renderMapNodes(false);
+}
+
+function _takClosePanel() {
+  _mapTakMode = false;
+  _takSetDrawMode(null);
+  _takClearEditorPreview();
+  const panel = document.getElementById("takPanel");
+  if (panel) panel.classList.add("hidden");
+  Object.values(_takFeatureLayers).forEach(g => { try { g.remove(); } catch (e) {} });
+  _takFeatureLayers = {};
+  if (_takIncomingLayer) {
+    try { _takIncomingLayer.remove(); } catch (e) {}
+    _takIncomingLayer = null;
+  }
+  _takIncomingMap.clear();
+  _takCustomLayers = [];
+  _takActiveLayerId = null;
+  _renderMapNodes(false);
+}
+
+function _takRefreshPanel() {
+  // Auto-layers
+  const autoEl = document.getElementById("takAutoLayers");
+  if (autoEl) {
+    autoEl.innerHTML = "";
+    const autoLayers = [
+      { key: "online",  label: "Online Nodes",  color: "#4caf50" },
+      { key: "offline", label: "Offline Nodes", color: "#8b4a4a" },
+    ];
+    autoLayers.forEach(al => {
+      const vis = _takAutoLayerVis[al.key] !== false;
+      const row = document.createElement("div");
+      row.className = "tak-layer-row";
+      row.innerHTML =
+        `<div class="tak-layer-color" style="background:${al.color}"></div>` +
+        `<span class="tak-layer-name${vis ? "" : " tak-layer-hidden"}">${al.label}</span>` +
+        `<button class="tak-layer-vis" title="${vis ? "Hide" : "Show"}">${_takEyeIcon(vis)}</button>`;
+      row.querySelector(".tak-layer-vis").addEventListener("click", (e) => {
+        _takConsumeUiEvent(e);
+        _takAutoLayerVis[al.key] = !vis;
+        _renderMapNodes(false);
+        _takRefreshPanel();
+      });
+      autoEl.appendChild(row);
+    });
+  }
+
+  // Custom layers
+  const customEl = document.getElementById("takCustomLayersList");
+  if (customEl) {
+    customEl.innerHTML = "";
+    if (_takCustomLayers.length === 0) {
+      customEl.innerHTML = '<div class="tak-empty-hint">No layers yet</div>';
+    } else {
+      _takCustomLayers.forEach(layer => {
+        const isActive = layer.id === _takActiveLayerId;
+        const sendState = _takLayerSendState.get(layer.id) || { state: "idle", text: "" };
+        const row = document.createElement("div");
+        row.className = "tak-layer-row" + (isActive ? " tak-layer-active" : "");
+        row.title = isActive ? "Active layer for drawing" : "Click to select for drawing";
+        row.innerHTML =
+          `<div class="tak-layer-color" style="background:${layer.color};border-radius:50%"></div>` +
+          `<span class="tak-layer-name${layer.visible ? "" : " tak-layer-hidden"}">${layer.name}</span>` +
+          `<button class="tak-layer-status tak-layer-status--${sendState.state}" title="${sendState.text || "No recent send status"}">${_takStatusIcon(sendState.state)}</button>` +
+          `<button class="tak-layer-resend" title="Resend layer">${_takResendIcon()}</button>` +
+          `<button class="tak-layer-vis" title="${layer.visible ? "Hide" : "Show"}">${_takEyeIcon(layer.visible)}</button>` +
+          `<button class="tak-layer-delete" title="Delete layer">&times;</button>`;
+
+        row.addEventListener("click", (e) => {
+          _takConsumeUiEvent(e);
+          _takActiveLayerId = isActive ? null : layer.id;
+          if (_takDrawMode) _takSetDrawMode(null);
+          _takRefreshPanel();
+        });
+        row.querySelector(".tak-layer-vis").addEventListener("click", (e) => {
+          _takConsumeUiEvent(e);
+          layer.visible = !layer.visible;
+          const grp = _takFeatureLayers[layer.id];
+          if (grp) { if (layer.visible) grp.addTo(_mapInstance); else grp.remove(); }
+          _takSaveToStorage();
+          _takRefreshPanel();
+        });
+        row.querySelector(".tak-layer-status").addEventListener("click", (e) => {
+          _takConsumeUiEvent(e);
+        });
+        row.querySelector(".tak-layer-resend").addEventListener("click", (e) => {
+          _takConsumeUiEvent(e, 500);
+          _takResendLayer(layer);
+        });
+        row.querySelector(".tak-layer-delete").addEventListener("click", (e) => {
+          _takConsumeUiEvent(e);
+          const itemsToDelete = Array.isArray(layer.items)
+            ? layer.items.filter((item) => ["marker", "circle", "ruler"].includes(item?.type) && item?.uid)
+            : [];
+          itemsToDelete.forEach((item, index) => {
+            setTimeout(() => { _takDeleteFeature(item); }, index * 120);
+          });
+          const grp = _takFeatureLayers[layer.id];
+          if (grp) { try { grp.remove(); } catch(e2) {} }
+          delete _takFeatureLayers[layer.id];
+          _takCustomLayers = _takCustomLayers.filter(l => l.id !== layer.id);
+          if (_takActiveLayerId === layer.id) {
+            _takActiveLayerId = null;
+            if (_takDrawMode) _takSetDrawMode(null);
+          }
+          _takSaveToStorage();
+          _takRefreshPanel();
+        });
+        customEl.appendChild(row);
+        if (isActive && Array.isArray(layer.items) && layer.items.length > 0) {
+          const itemsWrap = document.createElement("div");
+          itemsWrap.className = "tak-item-list";
+          layer.items.forEach((item) => {
+            const normalized = _takNormalizeFeature(item, layer.color);
+            if (!["marker", "circle", "ruler"].includes(normalized?.type)) return;
+            const itemRow = document.createElement("div");
+            itemRow.className = "tak-item-row";
+            itemRow.innerHTML =
+              `<span class="tak-item-type">${_takEscapeHtml(_takFeatureTypeLabel(normalized.type))}</span>` +
+              `<span class="tak-item-name">${_takEscapeHtml(normalized.label || _takFeatureTypeLabel(normalized.type))}</span>` +
+              `<button class="tak-item-delete" title="Delete object" aria-label="Delete object">` +
+                `<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12"/><path d="M18 6 6 18"/></svg>` +
+              `</button>`;
+            itemRow.addEventListener("click", (e) => { _takConsumeUiEvent(e, 500); });
+            itemRow.querySelector(".tak-item-delete").addEventListener("click", (e) => {
+              _takConsumeUiEvent(e, 500);
+              _takDeleteLayerItem(layer, item);
+            });
+            itemsWrap.appendChild(itemRow);
+          });
+          if (itemsWrap.childNodes.length > 0) customEl.appendChild(itemsWrap);
+        }
+      });
+    }
+  }
+
+  // Add-layer button listener (re-bind each refresh to avoid duplicates via cloning)
+  const addBtn = document.getElementById("takAddLayerBtn");
+  if (addBtn) {
+    const newBtn = addBtn.cloneNode(true);
+    addBtn.parentNode.replaceChild(newBtn, addBtn);
+    newBtn.addEventListener("click", (e) => {
+      _takConsumeUiEvent(e, 500);
+      _takPrompt("Layer name", "e.g. My Patrol Route", (name) => {
+        if (!name || !name.trim()) return;
+        const palette = ["#4a9eff","#ff9043","#4caf50","#ffc107","#b06aff","#ff6ab0","#00d4d4","#ff5555"];
+        const color = palette[_takCustomLayers.length % palette.length];
+        const layer = { id: Date.now().toString(), name: name.trim(), color, visible: true, items: [] };
+        _takCustomLayers.push(layer);
+        _takFeatureLayers[layer.id] = L.layerGroup().addTo(_mapInstance);
+        _takActiveLayerId = layer.id;
+        _takSaveToStorage();
+        _takRefreshPanel();
+      });
+    });
+  }
+
+  // Draw section visibility
+  const drawSection = document.getElementById("takDrawSection");
+  if (drawSection) drawSection.style.display = _takActiveLayerId ? "" : "none";
+
+  // Draw button re-binding
+  const drawBtns = { takDrawMarker: "marker", takDrawRuler: "ruler", takDrawCircle: "circle" };
+  Object.entries(drawBtns).forEach(([id, mode]) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.classList.toggle("tak-draw-btn--active", _takDrawMode === mode);
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+    newBtn.classList.toggle("tak-draw-btn--active", _takDrawMode === mode);
+    newBtn.addEventListener("click", (e) => {
+      _takConsumeUiEvent(e, 500);
+      _takSetDrawMode(_takDrawMode === mode ? null : mode);
+    });
+  });
+
+  // Cancel button
+  const cancelBtn = document.getElementById("takDrawCancel");
+  if (cancelBtn) {
+    cancelBtn.classList.toggle("hidden", !_takDrawMode);
+    const newCancel = cancelBtn.cloneNode(true);
+    cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+    newCancel.classList.toggle("hidden", !_takDrawMode);
+    newCancel.addEventListener("click", (e) => { _takConsumeUiEvent(e, 500); _takSetDrawMode(null); });
+  }
+
+  // Finish button unused: supported outbound tools complete with clicks
+  const finishBtn = document.getElementById("takDrawFinish");
+  if (finishBtn) {
+    const newFinish = finishBtn.cloneNode(true);
+    finishBtn.parentNode.replaceChild(newFinish, finishBtn);
+    newFinish.classList.add("hidden");
+    newFinish.disabled = true;
+  }
+}
+
+function _takEyeIcon(visible) {
+  if (visible) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+}
+
+function _takRenderAllCustomLayers() {
+  Object.values(_takFeatureLayers).forEach(g => { try { g.remove(); } catch(e) {} });
+  _takFeatureLayers = {};
+  _takCustomLayers.forEach(layer => _takRenderLayer(layer));
+}
+
+function _takRenderLayer(layer) {
+  if (_takFeatureLayers[layer.id]) {
+    try { _takFeatureLayers[layer.id].remove(); } catch(e) {}
+  }
+  const group = L.layerGroup();
+  layer.items.forEach(item => {
+    const featureItem = _takNormalizeFeature(item, layer.color);
+    const itemColor = featureItem.color || layer.color;
+    const dashArray = _takStrokeStyleToDashArray(featureItem.strokeStyle);
+    const weight = featureItem.strokeWeight || 1;
+    let feature = null;
+    if (featureItem.type === "marker") {
+      const icon = L.divIcon({
+        className: "",
+        html: _takBuildMarkerHtml(featureItem, "Waypoint"),
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+        popupAnchor: [0, -10],
+      });
+      feature = L.marker(featureItem.latlng, { icon });
+      if (featureItem.label || featureItem.remarks) feature.bindPopup(`<div class="nodes-map-popup"><div class="nodes-map-popup-name">${featureItem.label || "Waypoint"}</div>${featureItem.remarks ? `<div class="nodes-map-popup-row">${_takEscapeHtml(featureItem.remarks)}</div>` : ""}</div>`, { closeButton: false, autoPan: false });
+    } else if (featureItem.type === "polyline") {
+      feature = L.polyline(featureItem.latlngs, { color: itemColor, weight: Math.max(2, weight + 1), opacity: 0.85, dashArray });
+      if (featureItem.label || featureItem.remarks) feature.bindPopup(`<div class="nodes-map-popup"><div class="nodes-map-popup-name">${featureItem.label || "Route"}</div>${featureItem.remarks ? `<div class="nodes-map-popup-row">${_takEscapeHtml(featureItem.remarks)}</div>` : ""}</div>`, { closeButton: false, autoPan: false });
+    } else if (featureItem.type === "polygon") {
+      feature = L.polygon(featureItem.latlngs, { color: itemColor, weight: Math.max(2, weight), opacity: 0.85, fillColor: featureItem.fillColor || itemColor, fillOpacity: 0.12, dashArray });
+      if (featureItem.label || featureItem.remarks) feature.bindPopup(`<div class="nodes-map-popup"><div class="nodes-map-popup-name">${featureItem.label || "Area"}</div>${featureItem.remarks ? `<div class="nodes-map-popup-row">${_takEscapeHtml(featureItem.remarks)}</div>` : ""}</div>`, { closeButton: false, autoPan: false });
+    } else if (featureItem.type === "circle" && featureItem.latlng && featureItem.radiusMeters > 0) {
+      const radiusLabel = _takMeasureLabelMarker(featureItem.latlng, `R: ${_takFormatDistance(featureItem.radiusMeters)}`);
+      feature = L.featureGroup([
+        L.circle(featureItem.latlng, { radius: featureItem.radiusMeters, color: itemColor, weight: Math.max(2, weight), opacity: 0.85, fillColor: featureItem.fillColor || itemColor, fillOpacity: 0.12, dashArray }),
+        L.circleMarker(featureItem.latlng, { radius: 3, color: itemColor, weight: 2, fillColor: itemColor, fillOpacity: 1 }),
+        radiusLabel,
+      ].filter(Boolean));
+      if (featureItem.label || featureItem.remarks || featureItem.radiusMeters > 0) feature.bindPopup(`<div class="nodes-map-popup"><div class="nodes-map-popup-name">${featureItem.label || "Circle"}</div><div class="nodes-map-popup-row">radius: ${_takEscapeHtml(_takFormatDistance(featureItem.radiusMeters))}</div>${featureItem.remarks ? `<div class="nodes-map-popup-row">${_takEscapeHtml(featureItem.remarks)}</div>` : ""}</div>`, { closeButton: false, autoPan: false });
+    } else if (featureItem.type === "ruler" && featureItem.latlng && featureItem.rangeMeters > 0) {
+      const dest = _takDestinationPoint(featureItem.latlng, featureItem.rangeMeters, featureItem.bearingDeg || 0);
+      if (dest) {
+        const labelPoint = _takMidpoint(featureItem.latlng, dest);
+        const lengthLabel = _takMeasureLabelMarker(labelPoint, _takFormatDistance(featureItem.rangeMeters));
+        feature = L.featureGroup([
+          L.polyline([featureItem.latlng, dest], { color: itemColor, weight: Math.max(2, weight + 1), opacity: 0.85, dashArray: dashArray || "6 4" }),
+          L.circleMarker(featureItem.latlng, { radius: 3, color: itemColor, weight: 2, fillColor: itemColor, fillOpacity: 1 }),
+          L.circleMarker(dest, { radius: 3, color: itemColor, weight: 2, fillColor: itemColor, fillOpacity: 1 }),
+          lengthLabel,
+        ].filter(Boolean));
+        feature.bindPopup(`<div class="nodes-map-popup"><div class="nodes-map-popup-name">${featureItem.label || "Ruler"}</div><div class="nodes-map-popup-row">distance: ${_takEscapeHtml(_takFormatDistance(featureItem.rangeMeters))}</div>${featureItem.remarks ? `<div class="nodes-map-popup-row">${_takEscapeHtml(featureItem.remarks)}</div>` : ""}</div>`, { closeButton: false, autoPan: false });
+      }
+    } else if (featureItem.type === "ellipse" && featureItem.latlng && featureItem.majorMeters > 0 && featureItem.minorMeters > 0) {
+      const ellipsePoints = _takApproxEllipseLatLngs(featureItem.latlng, featureItem.majorMeters, featureItem.minorMeters, featureItem.angleDeg || 0);
+      if (ellipsePoints.length >= 12) {
+        feature = L.featureGroup([
+          L.polygon(ellipsePoints, { color: itemColor, weight: Math.max(2, weight), opacity: 0.85, fillColor: featureItem.fillColor || itemColor, fillOpacity: 0.12, dashArray }),
+          L.circleMarker(featureItem.latlng, { radius: 3, color: itemColor, weight: 2, fillColor: itemColor, fillOpacity: 1 }),
+        ]);
+        if (featureItem.label || featureItem.remarks) feature.bindPopup(`<div class="nodes-map-popup"><div class="nodes-map-popup-name">${featureItem.label || "Ellipse"}</div>${featureItem.remarks ? `<div class="nodes-map-popup-row">${_takEscapeHtml(featureItem.remarks)}</div>` : ""}</div>`, { closeButton: false, autoPan: false });
+      }
+    }
+    if (feature) group.addLayer(feature);
+  });
+  _takFeatureLayers[layer.id] = group;
+  if (layer.visible) group.addTo(_mapInstance);
+}
+
+function _takSetDrawMode(mode) {
+  _takBumpIgnoreMapClick(500);
+  if (_takDrawTempLayer) { try { _takDrawTempLayer.remove(); } catch(e) {} _takDrawTempLayer = null; }
+  if (!mode) _takClearEditorPreview();
+  _takDrawPoints = [];
+  _takDrawMode = mode;
+
+  const container = document.getElementById("nodesMapContainer");
+  _mapInstance.off("click", _takOnMapClick);
+  _mapInstance.off("dblclick", _takOnMapDblClick);
+  _mapInstance.off("mousemove", _takOnMapMouseMove);
+  if (mode === null) {
+    if (container) container.classList.remove("tak-drawing");
+    _mapInstance.doubleClickZoom.enable();
+  } else {
+    if (container) container.classList.add("tak-drawing");
+    _mapInstance.doubleClickZoom.disable();
+    _mapInstance.on("click", _takOnMapClick);
+    _mapInstance.on("dblclick", _takOnMapDblClick);
+    if (mode !== "marker") _mapInstance.on("mousemove", _takOnMapMouseMove);
+    else _mapInstance.off("mousemove", _takOnMapMouseMove);
+  }
+
+  const hint = document.getElementById("takDrawHint");
+  if (hint) {
+    if (!mode) { hint.textContent = ""; hint.classList.add("hidden"); }
+    else {
+      hint.classList.remove("hidden");
+      if (mode === "marker") hint.textContent = "Click on map to place waypoint";
+      else if (mode === "ruler") hint.textContent = "Click start, then click end point.";
+      else hint.textContent = "Click center, then click radius.";
+    }
+  }
+  _takRefreshPanel();
+}
+
+function _takOnMapClick(e) {
+  if (Date.now() < _takIgnoreMapClicksUntil) return;
+  if (!_takDrawMode || !_takActiveLayerId) return;
+  const latlng = [e.latlng.lat, e.latlng.lng];
+
+  if (_takDrawMode === "marker") {
+    const layer = _takCustomLayers.find(l => l.id === _takActiveLayerId);
+    if (!layer) return;
+    const n = layer.items.filter(i => i.type === "marker").length + 1;
+    const item = _takNormalizeFeature({ type: "marker", latlng, label: `WPT ${n}`, color: layer.color }, layer.color);
+    _takFeatureDialog("marker", item, (result) => {
+      layer.items.push(result);
+      _takRenderLayer(layer);
+      _takSaveToStorage();
+      _takPostFeature(result, result.color || layer.color, layer.id);
+      const hint = document.getElementById("takDrawHint");
+      if (hint) hint.textContent = "Waypoint placed. Click map for next, or Cancel.";
+    }, null, { anchorLatLng: e.latlng });
+    return;
+  }
+  if (_takDrawMode === "circle") {
+    if (_takDrawPoints.length === 0) {
+      _takDrawPoints.push(latlng);
+      _takUpdateTempDraw();
+      _takRefreshDrawHint();
+      _takRefreshPanel();
+      return;
+    }
+    const layer = _takCustomLayers.find(l => l.id === _takActiveLayerId);
+    if (!layer) return;
+    const center = _takDrawPoints[0];
+    const radiusMeters = _haversineDistance(center[0], center[1], latlng[0], latlng[1]);
+    if (!(radiusMeters > 0)) return;
+    const item = _takNormalizeFeature({ type: "circle", latlng: center, radiusMeters, label: "Circle", color: layer.color, fillColor: layer.color }, layer.color);
+    _takSetDrawMode(null);
+    _takFeatureDialog("circle", item, (result) => {
+      layer.items.push(result);
+      _takRenderLayer(layer);
+      _takSaveToStorage();
+      _takPostFeature(result, result.color || layer.color, layer.id);
+      _takClearEditorPreview();
+    }, () => {
+      _takClearEditorPreview();
+    }, { anchorLatLng: { lat: center[0], lng: center[1] } });
+    return;
+  }
+  if (_takDrawMode === "ruler") {
+    if (_takDrawPoints.length === 0) {
+      _takDrawPoints.push(latlng);
+      _takUpdateTempDraw();
+      _takRefreshDrawHint();
+      _takRefreshPanel();
+      return;
+    }
+    const layer = _takCustomLayers.find(l => l.id === _takActiveLayerId);
+    if (!layer) return;
+    const start = _takDrawPoints[0];
+    const rangeMeters = _haversineDistance(start[0], start[1], latlng[0], latlng[1]);
+    if (!(rangeMeters > 0)) return;
+    const bearingDeg = _bearingDegrees(start[0], start[1], latlng[0], latlng[1]);
+    const item = _takNormalizeFeature({
+      type: "ruler",
+      latlng: start,
+      rangeMeters,
+      bearingDeg,
+      label: "Ruler",
+      color: layer.color,
+    }, layer.color);
+    _takSetDrawMode(null);
+    _takFeatureDialog("ruler", item, (result) => {
+      layer.items.push(result);
+      _takRenderLayer(layer);
+      _takSaveToStorage();
+      _takPostFeature(result, result.color || layer.color, layer.id);
+      _takClearEditorPreview();
+    }, () => {
+      _takClearEditorPreview();
+    }, { anchorLatLng: { lat: start[0], lng: start[1] } });
+  }
+}
+
+function _takFinishPolyDraw() {
+  return;
+}
+
+function _takOnMapDblClick(e) {
+  return;
+}
+
+function _takRefreshDrawHint() {
+  const hint = document.getElementById("takDrawHint");
+  if (!hint || !_takDrawMode || _takDrawMode === "marker") return;
+  const n = _takDrawPoints.length;
+  if (_takDrawMode === "ruler") {
+    hint.textContent = n < 1
+      ? "Click start."
+      : "Move cursor to set end point, then click.";
+  } else if (_takDrawMode === "circle") {
+    hint.textContent = n < 1
+      ? "Click center."
+      : "Move cursor to set radius, then click.";
+  }
+}
+
+function _takOnMapMouseMove(e) {
+  if (!_takDrawMode || _takDrawMode === "marker" || _takDrawPoints.length === 0) return;
+  const preview = [..._takDrawPoints, [e.latlng.lat, e.latlng.lng]];
+  _takUpdateTempDraw(preview);
+}
+
+function _takUpdateTempDraw(points) {
+  const pts = points || _takDrawPoints;
+  if (_takDrawTempLayer) { try { _takDrawTempLayer.remove(); } catch(e) {} _takDrawTempLayer = null; }
+  const layer = _takCustomLayers.find(l => l.id === _takActiveLayerId);
+  const color = layer ? layer.color : "#4a9eff";
+  if (_takDrawMode === "circle") {
+    if (pts.length < 2) return;
+    const center = pts[0];
+    const edge = pts[pts.length - 1];
+    const radiusMeters = _haversineDistance(center[0], center[1], edge[0], edge[1]);
+    if (!(radiusMeters > 0)) return;
+    _takDrawTempLayer = L.featureGroup([
+      L.circle(center, { radius: radiusMeters, color, weight: 2, opacity: 0.7, fillOpacity: 0.08, dashArray: "6 4" }),
+      L.circleMarker(center, { radius: 3, color, weight: 2, fillColor: color, fillOpacity: 1 }),
+    ]).addTo(_mapInstance);
+    return;
+  }
+  if (_takDrawMode === "ruler") {
+    if (pts.length < 2) return;
+    _takDrawTempLayer = L.polyline(pts, { color, weight: 2, opacity: 0.7, dashArray: "6 4" }).addTo(_mapInstance);
+  }
 }
 
 function _renderMapNodes(fitBounds = true) {
@@ -2215,16 +3581,22 @@ function _renderMapNodes(fitBounds = true) {
   let _nodeEdges = null;   // Map<meshNumStr, [{to, snr}]>
 
   function _addMapMarker(lat, lon, node, estimated) {
-    // Role filter — skip node if active filter doesn't include its role
+    // Role filter Р Р†Р вЂљРІР‚Сњ skip node if active filter doesn't include its role
     if (_mapColorByRole && _mapRoleFilter.size > 0) {
       if (!_mapRoleFilter.has(_getNodeRoleKey(node))) return;
     }
 
     const online = !!node.online;
+
+    // TAK auto-layer visibility filter
+    if (_mapTakMode) {
+      const statusKey = online ? "online" : "offline";
+      if (_takAutoLayerVis[statusKey] === false) return;
+    }
     const shortName = node.shortName || (node.userId || node.id || "?").slice(0, 4);
     const label = node.longName || node.shortName || node.userId || node.id || "?";
     const status = online ? "online" : "offline";
-    const battery = node.batteryLevel != null ? `${node.batteryLevel}%` : "—";
+    const battery = node.batteryLevel != null ? `${node.batteryLevel}%` : "-";
     const nodeId = node.userId || node.id;
 
     const dotClass = estimated
@@ -2251,7 +3623,7 @@ function _renderMapNodes(fitBounds = true) {
     const popupHtml =
       `<div class="nodes-map-popup">` +
       `<div class="nodes-map-popup-name">${label}</div>` +
-      `<div class="nodes-map-popup-row">${status} · battery: ${battery}</div>` +
+      `<div class="nodes-map-popup-row">${status} | battery: ${battery}</div>` +
       (estimated ? `<div class="nodes-map-popup-row nodes-map-popup-row--est">~ position estimated</div>` : "") +
       `</div>`;
 
@@ -2389,12 +3761,12 @@ function _renderMapNodes(fitBounds = true) {
   const ourEntry = renderEntries.find((e) => e.node.hopsAway === 0);
   const hop1Entries = renderEntries.filter((e) => e.node.hopsAway === 1 && e.node.meshNum != null);
   if (ourEntry?.node.meshNum != null) {
-    // hop1 → ourNode
+    // hop1 Р Р†РІР‚В РІР‚в„ў ourNode
     for (const { node } of hop1Entries) {
       _addEdge(node.meshNum, ourEntry.node.meshNum, node.snr);
       _addEdge(ourEntry.node.meshNum, node.meshNum, node.snr);
     }
-    // hop2 → nearest hop1 + ourNode → that hop1 (same relay logic as _renderMapLinks)
+    // hop2 Р Р†РІР‚В РІР‚в„ў nearest hop1 + ourNode Р Р†РІР‚В РІР‚в„ў that hop1 (same relay logic as _renderMapLinks)
     for (const { node } of renderEntries) {
       if (node.hopsAway !== 2 || !node.meshNum) continue;
       // find nearest hop1 by distance
@@ -2413,7 +3785,7 @@ function _renderMapNodes(fitBounds = true) {
         _addEdge(relay.node.meshNum, node.meshNum, node.snr);
       }
     }
-    // any remaining estimated node with no edges → connect to ourNode as last resort
+    // any remaining estimated node with no edges Р Р†РІР‚В РІР‚в„ў connect to ourNode as last resort
     for (const { node, estimated } of renderEntries) {
       if (!estimated || !node.meshNum) continue;
       if (!_nodeEdges.has(String(node.meshNum))) {
@@ -2431,7 +3803,7 @@ function _renderMapNodes(fitBounds = true) {
   const roleLegendEl = document.getElementById("mapRoleLegend");
   if (roleLegendEl && _mapColorByRole) {
     // Collect present roles across ALL nodes (not just rendered ones, so legend stays stable)
-    const presentRoles = new Map(); // roleKey → label
+    const presentRoles = new Map(); // roleKey Р Р†РІР‚В РІР‚в„ў label
     for (const node of latestNodes) {
       const key = _getNodeRoleKey(node);
       if (!presentRoles.has(key)) {
@@ -2454,7 +3826,7 @@ function _renderMapNodes(fitBounds = true) {
           _mapRoleFilter = new Set([key]);
         } else if (_mapRoleFilter.has(key)) {
           _mapRoleFilter.delete(key);
-          // If all gone → show all
+          // If all gone Р Р†РІР‚В РІР‚в„ў show all
           if (_mapRoleFilter.size === 0) _mapRoleFilter = new Set();
         } else {
           _mapRoleFilter.add(key);
@@ -2504,7 +3876,7 @@ function _renderMapRadiusFill(withPos) {
 }
 
 function _renderMapRadiusRings(withPos) {
-  // Concentric signal-zone bands: strong (inner) → medium → weak (outer)
+  // Concentric signal-zone bands: strong (inner) Р Р†РІР‚В РІР‚в„ў medium Р Р†РІР‚В РІР‚в„ў weak (outer)
   const BANDS = [
     { scale: 1.0, color: "#ff7043", fillOpacity: 0.04, weight: 1, dashArray: "6 5", opacity: 0.55 }, // weak/outer
     { scale: 0.6, color: "#ffc107", fillOpacity: 0.05, weight: 1, dashArray: null,  opacity: 0.55 }, // medium
@@ -2546,6 +3918,10 @@ function _haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function _haversineDistance(lat1, lon1, lat2, lon2) {
+  return _haversineKm(lat1, lon1, lat2, lon2) * 1000;
+}
+
 function _deterministicAngle(str) {
   let h = 0;
   for (let i = 0; i < (str || "").length; i++)
@@ -2554,7 +3930,7 @@ function _deterministicAngle(str) {
 }
 
 function _estimateNodePosition(node, withPos, allByMeshNum, reverseLookup) {
-  // ourNode (hopsAway=0) → place at centroid of all GPS nodes
+  // ourNode (hopsAway=0) Р Р†РІР‚В РІР‚в„ў place at centroid of all GPS nodes
   if (node.hopsAway === 0) {
     if (withPos.length === 0) return null;
     const lat = withPos.reduce((s, n) => s + n.latitude, 0) / withPos.length;
@@ -2616,13 +3992,13 @@ function _estimateNodePosition(node, withPos, allByMeshNum, reverseLookup) {
 }
 
 // Link color by SNR quality:
-//   green  (#4caf50) — strong  (≥ 5 dB)
-//   yellow (#ffc107) — medium  (0..5 dB)
-//   orange (#ff7043) — weak    (< 0 dB)
-//   blue   (#4a9eff) — no SNR data
+//   green  (#4caf50) Р Р†Р вЂљРІР‚Сњ strong  (Р Р†РІР‚В°РўС’ 5 dB)
+//   yellow (#ffc107) Р Р†Р вЂљРІР‚Сњ medium  (0..5 dB)
+//   orange (#ff7043) Р Р†Р вЂљРІР‚Сњ weak    (< 0 dB)
+//   blue   (#4a9eff) Р Р†Р вЂљРІР‚Сњ no SNR data
 // Fallback (hopsAway only, dashed):
-//   blue dashed  — direct (1 hop, estimated)
-//   purple dashed — relayed (2 hops, estimated)
+//   blue dashed  Р Р†Р вЂљРІР‚Сњ direct (1 hop, estimated)
+//   purple dashed Р Р†Р вЂљРІР‚Сњ relayed (2 hops, estimated)
 function _renderMapLinks(withPos) {
   const drawn = new Set();
 
@@ -2644,7 +4020,7 @@ function _renderMapLinks(withPos) {
     if (node.meshNum != null) byMeshNum[String(node.meshNum)] = node;
   }
 
-  // — Real topology from NEIGHBORINFO_APP (solid, colored by SNR) —
+  // Р Р†Р вЂљРІР‚Сњ Real topology from NEIGHBORINFO_APP (solid, colored by SNR) Р Р†Р вЂљРІР‚Сњ
   const hasNeighbors = new Set();
   for (const node of withPos) {
     if (!node.neighbors || node.neighbors.length === 0) continue;
@@ -2657,19 +4033,19 @@ function _renderMapLinks(withPos) {
     }
   }
 
-  // — Observed relay links from packet relayNode field (solid orange, fw 2.3+) —
+  // Р Р†Р вЂљРІР‚Сњ Observed relay links from packet relayNode field (solid orange, fw 2.3+) Р Р†Р вЂљРІР‚Сњ
   for (const link of latestMeshLinks) {
     const fromNode = byMeshNum[String(link.from || "")];
     const viaNode = byMeshNum[String(link.via || "")];
     if (!fromNode || !viaNode) continue;
     const snr = link.snr ?? null;
-    // sender ↔ relay: draw both legs if via has position
+    // sender Р Р†РІР‚В РІР‚Сњ relay: draw both legs if via has position
     drawLine(fromNode.latitude, fromNode.longitude, viaNode.latitude, viaNode.longitude, snr, _snrToColor(snr));
     if (fromNode.meshNum != null) hasNeighbors.add(String(fromNode.meshNum));
     if (viaNode.meshNum != null) hasNeighbors.add(String(viaNode.meshNum));
   }
 
-  // — hopsAway fallback (dashed) for nodes without NEIGHBORINFO data —
+  // Р Р†Р вЂљРІР‚Сњ hopsAway fallback (dashed) for nodes without NEIGHBORINFO data Р Р†Р вЂљРІР‚Сњ
   const ourNode = withPos.find((n) => n.hopsAway === 0);
   if (!ourNode) return;
 
@@ -2677,12 +4053,12 @@ function _renderMapLinks(withPos) {
   const hop1All = withPos.filter((n) => n.hopsAway === 1);
   const hop2 = withPos.filter((n) => n.hopsAway === 2 && !hasNeighbors.has(String(n.meshNum ?? "")));
 
-  // Direct nodes (1 hop) — dashed blue
+  // Direct nodes (1 hop) Р Р†Р вЂљРІР‚Сњ dashed blue
   for (const node of hop1) {
     drawLine(ourNode.latitude, ourNode.longitude, node.latitude, node.longitude, node.snr ?? null, "#4a9eff", true);
   }
 
-  // Relayed nodes (2 hops) — connect to geographically nearest hop1, dashed purple
+  // Relayed nodes (2 hops) Р Р†Р вЂљРІР‚Сњ connect to geographically nearest hop1, dashed purple
   for (const node of hop2) {
     if (hop1All.length === 0) continue;
     let relay = hop1All[0];
@@ -2691,9 +4067,9 @@ function _renderMapLinks(withPos) {
       const d = _haversineKm(h1.latitude, h1.longitude, node.latitude, node.longitude);
       if (d < minDist) { minDist = d; relay = h1; }
     }
-    // relay → ourNode link (may already be drawn above)
+    // relay Р Р†РІР‚В РІР‚в„ў ourNode link (may already be drawn above)
     drawLine(ourNode.latitude, ourNode.longitude, relay.latitude, relay.longitude, relay.snr ?? null, "#4a9eff", true);
-    // relay → hop2 node
+    // relay Р Р†РІР‚В РІР‚в„ў hop2 node
     drawLine(relay.latitude, relay.longitude, node.latitude, node.longitude, node.snr ?? null, "#b06fff", true);
   }
 }
@@ -2716,12 +4092,14 @@ function renderDeviceStatus(status) {
   const connected = Boolean(mesh.connected);
   const isConnecting = !connected && ["starting", "detecting"].includes(String(mesh.mode || ""));
   const port = mesh.port ? ` on ${mesh.port}` : "";
+  const takChannel = Number.isInteger(mesh.takChannel) ? mesh.takChannel : 0;
+  const takHopLimit = Number.isInteger(mesh.takHopLimit) ? mesh.takHopLimit : 3;
   deviceStatus.className = `device-status ${connected ? "online" : (isConnecting ? "loading" : "offline")}`;
   deviceStatusTitle.textContent = connected
     ? `Device connected${port}`
     : (isConnecting ? `Connecting${port}` : "Device not connected");
   deviceStatusText.textContent = connected
-    ? "Auto-connected at startup"
+    ? `Auto-connected at startup | TAK ch${takChannel} | hop ${takHopLimit}`
     : (isConnecting ? "Link check in progress..." : (mesh.error || "Waiting for auto-connect"));
 
   deviceStatus.style.cursor = connected ? "pointer" : "";
@@ -3001,7 +4379,7 @@ if (receiveCashuTab) {
   });
 }
 
-// ── Send tab: Cashu / Bitcoin switcher ────────────────────────────────────────
+// Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ Send tab: Cashu / Bitcoin switcher Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
 async function loadSendBtcPanel() {
   if (!walletState.walletConfigured) {
     if (sendBtcNoWallet) sendBtcNoWallet.hidden = false;
@@ -3017,7 +4395,7 @@ async function loadSendBtcPanel() {
       sendBtcBalance.textContent = formatSats(bal.confirmed) +
         (bal.unconfirmed ? ` (+${formatSats(bal.unconfirmed)} unconfirmed)` : "");
     }
-  } catch { if (sendBtcBalance) sendBtcBalance.textContent = "—"; }
+  } catch { if (sendBtcBalance) sendBtcBalance.textContent = "Р Р†Р вЂљРІР‚Сњ"; }
   try {
     const fees = await fetchJson("/api/wallet/fees");
     if (sendBtcFeeRate && !sendBtcFeeRate.value) sendBtcFeeRate.value = fees.halfHourFee || 5;
@@ -3057,7 +4435,7 @@ if (sendBtcForm) {
         body: JSON.stringify({ toAddress, amountSats, feeRate }),
       });
       const explorer = walletState.testMode ? "https://mutinynet.com/tx/" : "https://mempool.space/tx/";
-      if (sendBtcStatus) sendBtcStatus.innerHTML = `Sent! <a href="${explorer}${data.txid}" target="_blank" rel="noopener">${data.txid.slice(0, 12)}…</a> · fee: ${formatSats(data.fee)}`;
+      if (sendBtcStatus) sendBtcStatus.innerHTML = `Sent! <a href="${explorer}${data.txid}" target="_blank" rel="noopener">${data.txid.slice(0, 12)}Р Р†Р вЂљР’В¦</a> Р вЂ™Р’В· fee: ${formatSats(data.fee)}`;
       if (sendBtcAddress) sendBtcAddress.value = "";
       if (sendBtcAmount) sendBtcAmount.value = "";
       setTimeout(loadSendBtcPanel, 2000);
@@ -3072,21 +4450,21 @@ if (sendBtcLnForm) {
     if (!invoice) { if (sendBtcLnStatus) sendBtcLnStatus.textContent = "Enter a Lightning invoice"; return; }
     const tm = walletState.testMode;
     const lower = invoice.toLowerCase();
-    if (tm && !lower.startsWith("lntbs")) { if (sendBtcLnStatus) sendBtcLnStatus.textContent = "Test mode: use lntbs… (signet) invoice"; return; }
-    if (!tm && !lower.startsWith("lnbc")) { if (sendBtcLnStatus) sendBtcLnStatus.textContent = "Use lnbc… (mainnet) invoice"; return; }
+    if (tm && !lower.startsWith("lntbs")) { if (sendBtcLnStatus) sendBtcLnStatus.textContent = "Test mode: use lntbsР Р†Р вЂљР’В¦ (signet) invoice"; return; }
+    if (!tm && !lower.startsWith("lnbc")) { if (sendBtcLnStatus) sendBtcLnStatus.textContent = "Use lnbcР Р†Р вЂљР’В¦ (mainnet) invoice"; return; }
     if (sendBtcLnStatus) sendBtcLnStatus.textContent = "Creating swap...";
     try {
       const data = await fetchJson("/api/wallet/pay-lightning", {
         method: "POST",
         body: JSON.stringify({ invoice }),
       });
-      if (sendBtcLnStatus) sendBtcLnStatus.textContent = `Swap created · ${formatSats(data.expectedAmount)} BTC sent · waiting for Lightning payment…`;
+      if (sendBtcLnStatus) sendBtcLnStatus.textContent = `Swap created Р вЂ™Р’В· ${formatSats(data.expectedAmount)} BTC sent Р вЂ™Р’В· waiting for Lightning paymentР Р†Р вЂљР’В¦`;
       if (sendBtcLnInvoice) sendBtcLnInvoice.value = "";
       setTimeout(loadSendBtcPanel, 2000);
     } catch (err) { if (sendBtcLnStatus) sendBtcLnStatus.textContent = err.message; }
   });
 }
-// ── End Send BTC ──────────────────────────────────────────────────────────────
+// Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ End Send BTC Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
 
 walletCopyReceiveIdButton.addEventListener("click", async () => {
   if (!walletReceiveId.value) return;
@@ -3114,7 +4492,7 @@ walletRefreshBalance.addEventListener("click", () => {
   loadCashuState();
 });
 
-// ─── Cashu event handlers ─────────────────────────────────────────────────────
+// Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ Cashu event handlers Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
 
 cashuSetMintButton.addEventListener("click", async () => {
   const url = cashuMintUrlInput.value.trim();
@@ -3127,7 +4505,7 @@ cashuSetMintButton.addEventListener("click", async () => {
     cashuState.mintUrl = data.mintUrl;
     cashuMintStatus.textContent = "Connected!";
     if (cashuMintInfo) {
-      cashuMintInfo.textContent = data.name ? `${data.name}${data.description ? " — " + data.description : ""}` : data.mintUrl;
+      cashuMintInfo.textContent = data.name ? `${data.name}${data.description ? " Р Р†Р вЂљРІР‚Сњ " + data.description : ""}` : data.mintUrl;
       cashuMintInfo.hidden = false;
     }
     applyCashuState();
@@ -3150,7 +4528,7 @@ cashuCreateInvoiceButton.addEventListener("click", async () => {
     cashuInvoicePr.value = data.pr;
     cashuInvoiceQr.src = data.qr;
     cashuInvoiceBlock.hidden = false;
-    cashuInvoiceStatus.textContent = `Invoice for ${amount} sats — pay with Lightning`;
+    cashuInvoiceStatus.textContent = `Invoice for ${amount} sats Р Р†Р вЂљРІР‚Сњ pay with Lightning`;
     // Add to pending
     cashuState.pendingInvoices = cashuState.pendingInvoices || [];
     cashuState.pendingInvoices.push({ hash: data.hash, amount, pr: data.pr, createdAt: new Date().toISOString() });
@@ -3229,7 +4607,7 @@ walletSendForm.addEventListener("submit", async (event) => {
     walletSendStatus.textContent = `Token created: ${amount} sats`;
     cashuSendTokenOutput.textContent = data.token;
     cashuSendTokenBlock.hidden = false;
-    // Send via Meshtastic DM if recipient set
+        walletSendStatus.textContent = `Token ready - mesh send failed, copy manually`;
     if (recipient && transport === "Meshtastic DM") {
       try {
         await fetchJson("/api/mesh/send", {
@@ -3238,7 +4616,7 @@ walletSendForm.addEventListener("submit", async (event) => {
         });
         walletSendStatus.textContent = `Sent ${amount} sats to ${recipient} via mesh`;
       } catch {
-        walletSendStatus.textContent = `Token ready — mesh send failed, copy manually`;
+        walletSendStatus.textContent = `Token ready Р Р†Р вЂљРІР‚Сњ mesh send failed, copy manually`;
       }
     }
     walletAmountInput.value = "";
@@ -3294,7 +4672,7 @@ cashuReceiveForm.addEventListener("submit", async (event) => {
     const data = await fetchJson("/api/cashu/receive", { method: "POST", body: JSON.stringify({ token }) });
     cashuState.balance = data.balance;
     cashuReceiveStatus.textContent = data.unverified
-      ? `Accepted ${data.amount} sats offline (unverified — redeem online to confirm)`
+      ? `Accepted ${data.amount} sats offline (unverified Р Р†Р вЂљРІР‚Сњ redeem online to confirm)`
       : `Received ${data.amount} sats! Balance: ${data.balance} sats`;
     cashuReceiveInput.value = "";
     applyCashuState();
@@ -3306,9 +4684,9 @@ cashuReceiveForm.addEventListener("submit", async (event) => {
   }
 });
 
-// ─── End Cashu event handlers ─────────────────────────────────────────────────
+// Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ End Cashu event handlers Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
 
-// ─── Swap panel handlers ───────────────────────────────────────────────────────
+// Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ Swap panel handlers Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
 
 function renderActiveSwaps(swaps) {
   if (!activeSwapsCard || !activeSwapsList) return;
@@ -3319,7 +4697,7 @@ function renderActiveSwaps(swaps) {
   active.forEach((s) => {
     const el = document.createElement("div");
     el.className = "wallet-pending-item";
-    const dir = s.type === "btc-to-cashu" ? "BTC → Cashu" : "Cashu → BTC";
+    const dir = s.type === "btc-to-cashu" ? "BTC Р Р†РІР‚В РІР‚в„ў Cashu" : "Cashu Р Р†РІР‚В РІР‚в„ў BTC";
     const amt = s.amount ? `${s.amount} sats` : "";
     el.innerHTML = `<span class="wallet-pending-label">${dir} ${amt}</span><span class="wallet-pending-status">${s.status}</span>`;
     activeSwapsList.appendChild(el);
@@ -3335,7 +4713,7 @@ if (clearSwapsButton) {
   });
 }
 
-// Settings mint button — same API as Fund panel
+// Settings mint button Р Р†Р вЂљРІР‚Сњ same API as Fund panel
 if (settingsSetMintButton) {
   settingsSetMintButton.addEventListener("click", async () => {
     const url = (settingsMintUrlInput?.value || "").trim();
@@ -3358,7 +4736,7 @@ if (settingsSetMintButton) {
   });
 }
 
-// ── Swap panel ────────────────────────────────────────────────────────────────
+// Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ Swap panel Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
 
 function clearSwapLnPoll() {
   if (swapLnPollInterval !== null) {
@@ -3370,7 +4748,7 @@ function clearSwapLnPoll() {
 function startSwapLnPoll(hash) {
   clearSwapLnPoll();
   let attempts = 0;
-  const MAX_ATTEMPTS = 120; // 120 × 5s = 10 min
+  const MAX_ATTEMPTS = 120; // 120 Р вЂњРІР‚вЂќ 5s = 10 min
   swapLnPollInterval = setInterval(async () => {
     attempts++;
     if (attempts > MAX_ATTEMPTS) {
@@ -3385,7 +4763,7 @@ function startSwapLnPoll(hash) {
       cashuState.balance = data.balance;
       cashuState.currentInvoiceHash = null;
       cashuState.pendingInvoices = (cashuState.pendingInvoices || []).filter((i) => i.hash !== hash);
-      if (swapLnCheckStatus) swapLnCheckStatus.textContent = `Paid! +${data.amount} sats — balance updated.`;
+      if (swapLnCheckStatus) swapLnCheckStatus.textContent = `Paid! +${data.amount} sats Р Р†Р вЂљРІР‚Сњ balance updated.`;
       if (swapLnBlock) swapLnBlock.hidden = true;
       if (swapLnAmount) swapLnAmount.value = "";
       if (swapLnStatus) swapLnStatus.textContent = "";
@@ -3419,8 +4797,8 @@ if (swapLnInvoiceButton) {
     try {
       const data = await fetchJson("/api/cashu/invoice", { method: "POST", body: JSON.stringify({ amount }) });
       if (swapLnStatus) swapLnStatus.textContent = walletState.testMode
-        ? `Signet invoice for ${amount} sats — pay at faucet.mutinynet.com (Lightning tab)`
-        : `Invoice for ${amount} sats — pay with any Lightning wallet`;
+        ? `Signet invoice for ${amount} sats Р Р†Р вЂљРІР‚Сњ pay at faucet.mutinynet.com (Lightning tab)`
+        : `Invoice for ${amount} sats Р Р†Р вЂљРІР‚Сњ pay with any Lightning wallet`;
       showSwapLnInvoice(data.pr, data.qr, data.hash, amount);
     } catch (e) {
       if (swapLnStatus) swapLnStatus.textContent = e.message;
@@ -3461,12 +4839,12 @@ if (swapLnCheckButton) {
   });
 }
 
-// Hidden stub form — no-op
+// Hidden stub form Р Р†Р вЂљРІР‚Сњ no-op
 if (swapBtcToCashuForm) {
   swapBtcToCashuForm.addEventListener("submit", (e) => e.preventDefault());
 }
 
-// Cashu → Lightning: show amount preview when invoice pasted
+// Cashu Р Р†РІР‚В РІР‚в„ў Lightning: show amount preview when invoice pasted
 if (swapCashuBtcAddr) {
   swapCashuBtcAddr.addEventListener("input", () => {
     const inv = (swapCashuBtcAddr.value || "").trim().toLowerCase();
@@ -3481,7 +4859,7 @@ if (swapCashuBtcAddr) {
   });
 }
 
-// Cashu → Lightning: pay invoice (no manual amount)
+// Cashu Р Р†РІР‚В РІР‚в„ў Lightning: pay invoice (no manual amount)
 if (swapCashuToBtcForm) {
   swapCashuToBtcForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -3529,7 +4907,7 @@ if (swapCashuReceiveForm) {
       const data = await fetchJson("/api/cashu/receive", { method: "POST", body: JSON.stringify({ token }) });
       cashuState.balance = data.balance;
       if (swapCashuReceiveStatus) swapCashuReceiveStatus.textContent = data.unverified
-        ? `Accepted ${data.amount} sats offline (unverified — redeem online to confirm)`
+        ? `Accepted ${data.amount} sats offline (unverified Р Р†Р вЂљРІР‚Сњ redeem online to confirm)`
         : `Received ${data.amount} sats! Balance: ${data.balance} sats`;
       if (swapCashuReceiveInput) swapCashuReceiveInput.value = "";
       applyCashuState();
@@ -3555,7 +4933,7 @@ if (swapCashuSendForm) {
     try {
       const data = await fetchJson("/api/cashu/send", { method: "POST", body: JSON.stringify({ amount, peer: recipient || "manual", memo: "" }) });
       cashuState.balance = Math.max(0, cashuState.balance - amount);
-      applyCashuState();
+          if (swapCashuSendStatus) swapCashuSendStatus.textContent = "Token ready - mesh send failed, copy manually";
       if (swapCashuSendToken) swapCashuSendToken.value = data.token;
       if (swapCashuSendResult) swapCashuSendResult.hidden = false;
       if (swapCashuSendStatus) swapCashuSendStatus.textContent = `Token created: ${amount} sats`;
@@ -3564,7 +4942,7 @@ if (swapCashuSendForm) {
           await fetchJson("/api/mesh/send", { method: "POST", body: JSON.stringify({ destinationId: recipient, text: data.token }) });
           if (swapCashuSendStatus) swapCashuSendStatus.textContent = `Sent ${amount} sats to ${recipient} via mesh`;
         } catch {
-          if (swapCashuSendStatus) swapCashuSendStatus.textContent = "Token ready — mesh send failed, copy manually";
+          if (swapCashuSendStatus) swapCashuSendStatus.textContent = "Token ready Р Р†Р вЂљРІР‚Сњ mesh send failed, copy manually";
         }
       }
       if (swapCashuSendAmount) swapCashuSendAmount.value = "";
@@ -3588,7 +4966,7 @@ if (swapCashuCopyTokenBtn) {
   });
 }
 
-// ─── End Swap panel handlers ───────────────────────────────────────────────────
+// Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ End Swap panel handlers Р Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљР Р†РІР‚СњР вЂљ
 
 function fillMnemonicGrid(container, mnemonic) {
   container.innerHTML = "";
@@ -3611,7 +4989,7 @@ function updateSeedRevealState(visible) {
     if (walletState.mnemonic) {
       fillMnemonicGrid(walletSeedRevealGrid, walletState.mnemonic);
     } else {
-      walletSeedRevealGrid.innerHTML = '<div style="grid-column:1/-1;color:var(--muted);font-size:9px">Seed not available — page was reloaded. Check data/wallet.json</div>';
+      walletSeedRevealGrid.innerHTML = '<div style="grid-column:1/-1;color:var(--muted);font-size:9px">Seed not available Р Р†Р вЂљРІР‚Сњ page was reloaded. Check data/wallet.json</div>';
     }
   }
 }
@@ -3781,6 +5159,12 @@ deviceMetaSave.addEventListener("click", () => {
     payload.latitude = parseFloat(lat);
     payload.longitude = parseFloat(lon);
   }
+  if (deviceMetaTakChannel && deviceMetaTakChannel.value.trim() !== "") {
+    payload.takChannel = parseInt(deviceMetaTakChannel.value, 10);
+  }
+  if (deviceMetaTakHopLimit && deviceMetaTakHopLimit.value.trim() !== "") {
+    payload.takHopLimit = parseInt(deviceMetaTakHopLimit.value, 10);
+  }
   fetchJson("/api/device-meta", { method: "POST", body: JSON.stringify(payload) }).then(() => {
     deviceMetaStatus.textContent = "Saved.";
   }).catch((err) => {
@@ -3916,6 +5300,44 @@ function connectEvents() {
   });
   source.addEventListener("swaps", (event) => {
     renderActiveSwaps(JSON.parse(event.data) || []);
+  });
+  source.addEventListener("tak_send_status", (event) => {
+    const { uid, status, transport } = JSON.parse(event.data);
+    const pending = _takPendingSends.get(uid);
+    if (pending) {
+      if (status === "sending" || status === "queued") {
+        _takSetLayerStatus(pending.layerId, "sending", "Mesh transfer in progress...");
+        return;
+      }
+      if (pending.timer) {
+        clearTimeout(pending.timer);
+        pending.timer = null;
+      }
+      if (status === "sent") {
+        _takPendingSends.delete(uid);
+        _takSetLayerStatus(pending.layerId, "sent", transport === "direct" ? "Broadcast sent" : "Broadcast sent to mesh");
+      } else if (status === "unconfirmed") {
+        _takSetLayerStatus(pending.layerId, "unconfirmed", "Broadcast queued, remote ACK not confirmed");
+      }
+      else {
+        _takPendingSends.delete(uid);
+        const msg = event.data ? (JSON.parse(event.data).reason || "") : "";
+        _takSetLayerStatus(pending.layerId, "error", (msg || "Send failed"));
+        console.error("[TAK] send failed:", msg);
+      }
+    }
+  });
+  source.addEventListener("tak_feature", (event) => {
+    const feature = JSON.parse(event.data);
+    if (feature?.type === "delete") _takHandleDeleteFeature(feature);
+    else if (feature) _takRenderIncomingFeature(feature);
+  });
+  source.addEventListener("tak_features", (event) => {
+    const features = JSON.parse(event.data) || [];
+    features.forEach((feature) => {
+      if (feature?.type === "delete") _takHandleDeleteFeature(feature);
+      else _takRenderIncomingFeature(feature);
+    });
   });
   source.addEventListener("ack_update", (event) => {
     const { id, ack } = JSON.parse(event.data);

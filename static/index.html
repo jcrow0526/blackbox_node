@@ -1030,6 +1030,14 @@
           <span class="device-meta-label">Longitude <span class="device-meta-hint">(optional)</span></span>
           <input id="deviceMetaLon" type="number" step="any" placeholder="e.g. 37.6173">
         </label>
+        <label class="device-meta-field" for="deviceMetaTakChannel">
+          <span class="device-meta-label">TAK Channel <span class="device-meta-hint">(Meshtastic channel index 0-7)</span></span>
+          <input id="deviceMetaTakChannel" type="number" min="0" max="7" step="1" placeholder="0">
+        </label>
+        <label class="device-meta-field" for="deviceMetaTakHopLimit">
+          <span class="device-meta-label">TAK Hop Limit <span class="device-meta-hint">(0-7, usually 3)</span></span>
+          <input id="deviceMetaTakHopLimit" type="number" min="0" max="7" step="1" placeholder="3">
+        </label>
         <div id="deviceMetaStatus" class="device-status-text"></div>
         <button id="deviceMetaSave" type="button">Save to device</button>
       </div>

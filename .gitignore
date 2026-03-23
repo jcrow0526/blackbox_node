@@ -12,6 +12,7 @@ llama/
 pydeps/
 pybootstrap/
 node_modules/
+_vendor/
 
 # -----------------------------------------------------------------------------
 # Secrets and sensitive local config
