@@ -12,7 +12,7 @@ It is designed for **off-grid communications**, **disaster response**, **field o
 
 ## Demo
 
-[![Watch Blackbox Node in action](https://img.youtube.com/vi/OcAJljU9FwA/maxresdefault.jpg)](https://www.youtube.com/watch?v=OcAJljU9FwA)
+[![Watch Blackbox Node in action](https://img.youtube.com/vi/R8iXfAWsvDg/maxresdefault.jpg)](https://www.youtube.com/watch?v=R8iXfAWsvDg)
 
 ---
 
