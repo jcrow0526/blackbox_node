@@ -10,6 +10,12 @@ It is designed for **off-grid communications**, **disaster response**, **field o
 
 ---
 
+## Demo
+
+[![Watch Blackbox Node in action](https://img.youtube.com/vi/OcAJljU9FwA/maxresdefault.jpg)](https://www.youtube.com/watch?v=OcAJljU9FwA)
+
+---
+
 ## Why people use Blackbox Node
 
 - Run a local offline AI assistant on your own machine with `llama.cpp`
