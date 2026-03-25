@@ -17,6 +17,7 @@ const chatText = document.getElementById("chatText");
 const chatSubtitle = document.getElementById("chatSubtitle");
 const chatModeAiButton = document.getElementById("chatModeAiButton");
 const chatModeDmButton = document.getElementById("chatModeDmButton");
+const chatModeChansButton = document.getElementById("chatModeChansButton");
 const clearChatButton = document.getElementById("clearChatButton");
 const chatPeerRow = document.getElementById("chatPeerRow");
 const chatPeerSelect = document.getElementById("chatPeerSelect");
@@ -25,6 +26,13 @@ const chatPeerTrigger = document.getElementById("chatPeerTrigger");
 const chatPeerLabel = document.getElementById("chatPeerLabel");
 const chatPeerCashuButton = document.getElementById("chatPeerCashuButton");
 const chatPeerFilterButtons = Array.from(document.querySelectorAll("[data-chat-peer-filter]"));
+const chatChannelRow = document.getElementById("chatChannelRow");
+const chatChannelSelect = document.getElementById("chatChannelSelect");
+const chatChannelDropdown = document.getElementById("chatChannelDropdown");
+const chatChannelTrigger = document.getElementById("chatChannelTrigger");
+const chatChannelLabel = document.getElementById("chatChannelLabel");
+const chatChannelList = document.getElementById("chatChannelList");
+const chatChannelCreateButton = document.getElementById("chatChannelCreateButton");
 const nodesMapModal = document.getElementById("nodesMapModal");
 const nodesMapClose = document.getElementById("nodesMapClose");
 const nodesMapContainer = document.getElementById("nodesMapContainer");
@@ -198,6 +206,13 @@ const deviceMetaTakChannel = document.getElementById("deviceMetaTakChannel");
 const deviceMetaTakHopLimit = document.getElementById("deviceMetaTakHopLimit");
 const deviceMetaStatus = document.getElementById("deviceMetaStatus");
 const deviceMetaSave = document.getElementById("deviceMetaSave");
+const chatChannelModal = document.getElementById("chatChannelModal");
+const chatChannelModalClose = document.getElementById("chatChannelModalClose");
+const chatChannelModalForm = document.getElementById("chatChannelModalForm");
+const chatChannelModalName = document.getElementById("chatChannelModalName");
+const chatChannelModalIndex = document.getElementById("chatChannelModalIndex");
+const chatChannelModalStatus = document.getElementById("chatChannelModalStatus");
+const chatChannelModalSave = document.getElementById("chatChannelModalSave");
 const settingsMintUrlInput = document.getElementById("settingsMintUrlInput");
 const settingsSetMintButton = document.getElementById("settingsSetMintButton");
 const settingsMintStatus = document.getElementById("settingsMintStatus");
@@ -243,12 +258,21 @@ const HELP_MODAL_TITLE_DEFAULT = "About BLACKBOX NODE";
 const HELP_MODAL_TITLE_DONATE = "DONATE";
 const CHAT_MODE_AI = "ai";
 const CHAT_MODE_DM = "dm";
+const CHAT_MODE_CHANS = "chans";
 const CHAT_LAST_PEER_STORAGE_KEY = "blackbox.chat.lastPeer";
+const CHAT_LAST_CHANNEL_STORAGE_KEY = "blackbox.chat.lastChannel";
+const CHAT_CHANNELS_STORAGE_KEY = "blackbox.chat.channels";
 const CHAT_PLACEHOLDER_AI = "Write a message. Enter to send, Shift+Enter for new line.";
 const CHAT_PLACEHOLDER_DM = "Write a DM to selected node. Enter to send, Shift+Enter for new line.";
+const CHAT_PLACEHOLDER_CHANS = "Write a channel message. Enter to send, Shift+Enter for new line.";
+const DEFAULT_CHAT_CHANNELS = [
+  { id: "primary", name: "Primary Channel", channelIndex: 0 },
+];
 const chatState = {
   mode: CHAT_MODE_AI,
   selectedPeer: readStoredChatPeer(),
+  channels: readStoredChatChannels(),
+  selectedChannel: readStoredChatChannel(),
   localExchange: null,
   dmLoadingPeer: "",
   peerFilters: {
@@ -349,6 +373,114 @@ function persistChatPeer(peerId) {
       localStorage.removeItem(CHAT_LAST_PEER_STORAGE_KEY);
     }
   } catch {}
+}
+
+function normalizeChannelIndex(value, fallback = 0) {
+  const parsed = Number.parseInt(String(value ?? fallback), 10);
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= 7 ? parsed : fallback;
+}
+
+function normalizeStoredChannelEntry(entry, usedIndexes = new Set()) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+  const channelIndex = normalizeChannelIndex(entry.channelIndex, -1);
+  if (channelIndex < 0 || usedIndexes.has(channelIndex)) {
+    return null;
+  }
+  const id = String(entry.id || `ch-${channelIndex}`).trim() || `ch-${channelIndex}`;
+  const name = String(entry.name || "").trim().slice(0, 32);
+  if (!name) {
+    return null;
+  }
+  usedIndexes.add(channelIndex);
+  return { id, name, channelIndex };
+}
+
+function readStoredChatChannels() {
+  try {
+    const raw = localStorage.getItem(CHAT_CHANNELS_STORAGE_KEY);
+    if (!raw) {
+      return [...DEFAULT_CHAT_CHANNELS];
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [...DEFAULT_CHAT_CHANNELS];
+    }
+    const usedIndexes = new Set();
+    const normalized = parsed
+      .map((entry) => normalizeStoredChannelEntry(entry, usedIndexes))
+      .filter(Boolean);
+    if (!normalized.length) {
+      return [...DEFAULT_CHAT_CHANNELS];
+    }
+    if (!normalized.some((item) => item.channelIndex === 0)) {
+      return [...DEFAULT_CHAT_CHANNELS, ...normalized];
+    }
+    return normalized;
+  } catch {
+    return [...DEFAULT_CHAT_CHANNELS];
+  }
+}
+
+function persistChatChannels(channels) {
+  try {
+    localStorage.setItem(CHAT_CHANNELS_STORAGE_KEY, JSON.stringify(channels));
+  } catch {}
+}
+
+function readStoredChatChannel() {
+  try {
+    return String(localStorage.getItem(CHAT_LAST_CHANNEL_STORAGE_KEY) || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function persistChatChannel(channelId) {
+  try {
+    const value = String(channelId || "").trim();
+    if (value) {
+      localStorage.setItem(CHAT_LAST_CHANNEL_STORAGE_KEY, value);
+    } else {
+      localStorage.removeItem(CHAT_LAST_CHANNEL_STORAGE_KEY);
+    }
+  } catch {}
+}
+
+function getSelectedChatChannel() {
+  const preferredId = String(chatState.selectedChannel || "").trim();
+  const preferred = chatState.channels.find((channel) => channel.id === preferredId);
+  if (preferred) {
+    return preferred;
+  }
+  return chatState.channels[0] || null;
+}
+
+function setChatChannelSelection(channelId, { persist = true } = {}) {
+  const requested = String(channelId || "").trim();
+  const hasRequested = chatState.channels.some((channel) => channel.id === requested);
+  const resolved = hasRequested ? requested : (chatState.channels[0]?.id || "");
+  chatState.selectedChannel = resolved;
+  if (chatChannelSelect) {
+    chatChannelSelect.value = resolved;
+  }
+  if (persist) {
+    persistChatChannel(resolved);
+  }
+}
+
+function formatChatChannelLabel(channel) {
+  if (!channel) {
+    return "Select channel";
+  }
+  return `${channel.name} (ch${channel.channelIndex})`;
+}
+
+function ensureSelectedChatChannel() {
+  const storedId = readStoredChatChannel();
+  const preferredId = chatState.selectedChannel || storedId || chatState.channels[0]?.id || "";
+  setChatChannelSelection(preferredId, { persist: true });
 }
 
 function syncWalletRecipientFromChatPeer(peerId) {
@@ -465,7 +597,10 @@ function syncNodeSelectors() {
   } else if (chatPeerSelect) {
     setChatPeerSelection(chatPeerSelect.value, { syncWallet: true, persist: true });
   }
+  populateChatChannelSelect();
+  ensureSelectedChatChannel();
   renderChatPeerList();
+  renderChatChannelList();
 }
 
 function renderChatPeerList() {
@@ -528,6 +663,106 @@ function updateDmTabUnreadGlow() {
   if (!chatModeDmButton) return;
   const hasAny = unreadPeers.size > 0 && chatState.mode !== CHAT_MODE_DM;
   chatModeDmButton.classList.toggle("has-unread", hasAny);
+}
+
+function populateChatChannelSelect() {
+  if (!chatChannelSelect) {
+    return;
+  }
+  const selectedBefore = String(chatState.selectedChannel || chatChannelSelect.value || "").trim();
+  chatChannelSelect.innerHTML = "";
+  chatState.channels.forEach((channel) => {
+    const option = document.createElement("option");
+    option.value = channel.id;
+    option.textContent = formatChatChannelLabel(channel);
+    chatChannelSelect.appendChild(option);
+  });
+  const hasSelected = chatState.channels.some((channel) => channel.id === selectedBefore);
+  chatChannelSelect.value = hasSelected ? selectedBefore : (chatState.channels[0]?.id || "");
+}
+
+function renderChatChannelList() {
+  if (!chatChannelList) {
+    return;
+  }
+  if (!chatState.channels.length) {
+    chatChannelList.innerHTML = '<div class="chat-peer-empty">No channels configured</div>';
+    if (chatChannelLabel) {
+      chatChannelLabel.textContent = "Select channel";
+    }
+    return;
+  }
+  chatChannelList.innerHTML = "";
+  chatState.channels.forEach((channel) => {
+    const item = document.createElement("div");
+    const isActive = channel.id === chatState.selectedChannel;
+    item.className = "chat-peer-item" + (isActive ? " is-active" : "");
+    item.dataset.channelId = channel.id;
+    item.innerHTML = `<span class="chat-peer-item-name">${formatChatChannelLabel(channel)}</span>`;
+    item.addEventListener("click", () => {
+      setChatChannelSelection(channel.id, { persist: true });
+      if (chatChannelList) {
+        chatChannelList.hidden = true;
+      }
+      renderChatChannelList();
+      if (chatState.mode === CHAT_MODE_CHANS) {
+        renderChannelChat();
+      }
+    });
+    chatChannelList.appendChild(item);
+  });
+
+  if (chatChannelLabel) {
+    chatChannelLabel.textContent = formatChatChannelLabel(getSelectedChatChannel());
+  }
+}
+
+function createCustomChatChannel(nameInput, indexInput) {
+  const name = String(nameInput || "").trim().slice(0, 32);
+  if (!name) {
+    throw new Error("Channel name is required.");
+  }
+  const channelIndex = normalizeChannelIndex(indexInput, -1);
+  if (channelIndex < 0) {
+    throw new Error("Channel index must be between 0 and 7.");
+  }
+  if (chatState.channels.some((channel) => channel.channelIndex === channelIndex)) {
+    throw new Error(`Channel ch${channelIndex} already exists.`);
+  }
+  const channel = {
+    id: `ch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    name,
+    channelIndex,
+  };
+  chatState.channels = [...chatState.channels, channel];
+  persistChatChannels(chatState.channels);
+  populateChatChannelSelect();
+  setChatChannelSelection(channel.id, { persist: true });
+  renderChatChannelList();
+  if (chatState.mode === CHAT_MODE_CHANS) {
+    renderChannelChat();
+  }
+}
+
+function openChatChannelModal() {
+  if (!chatChannelModal) {
+    return;
+  }
+  chatChannelModal.classList.remove("hidden");
+  chatChannelModal.setAttribute("aria-hidden", "false");
+  if (chatChannelModalForm) chatChannelModalForm.reset();
+  if (chatChannelModalIndex) chatChannelModalIndex.value = "0";
+  if (chatChannelModalStatus) chatChannelModalStatus.textContent = "";
+  if (chatChannelModalSave) chatChannelModalSave.disabled = false;
+  setTimeout(() => chatChannelModalName?.focus(), 0);
+}
+
+function closeChatChannelModal() {
+  if (!chatChannelModal) {
+    return;
+  }
+  chatChannelModal.classList.add("hidden");
+  chatChannelModal.setAttribute("aria-hidden", "true");
 }
 
 function renderChatEmpty(message) {
@@ -593,6 +828,19 @@ async function clearActiveChat() {
     await loadMessages();
     return;
   }
+  if (chatState.mode === CHAT_MODE_CHANS) {
+    const channel = getSelectedChatChannel();
+    if (!channel) {
+      renderChatEmpty("Select a channel to clear.");
+      return;
+    }
+    await fetchJson("/api/messages/clear", {
+      method: "POST",
+      body: JSON.stringify({ scope: "channel", channelIndex: channel.channelIndex }),
+    });
+    await loadMessages();
+    return;
+  }
 
   await fetchJson("/api/messages/clear", {
     method: "POST",
@@ -619,12 +867,49 @@ function isPeerDmMessage(message, peerId) {
   if (direction !== "in" && direction !== "out") {
     return false;
   }
+  const hasDirectFlag = Object.hasOwn(message, "isDirectMessage");
+  const isDirectMessage = hasDirectFlag
+    ? Boolean(message.isDirectMessage)
+    : String(message.recipient || "") === "local-ai";
   const sender = String(message.sender || "");
   const recipient = String(message.recipient || "");
   if (direction === "in") {
-    return sender === peerId && recipient === "local-ai";
+    return isDirectMessage && sender === peerId;
   }
   return recipient === peerId && sender === "local-ui";
+}
+
+function isChannelThreadMessage(message, channelIndex) {
+  if (!message) {
+    return false;
+  }
+  const direction = String(message.direction || "");
+  if (direction !== "in" && direction !== "out") {
+    return false;
+  }
+  const msgChannelIndex = normalizeChannelIndex(message.channelIndex, -1);
+  if (msgChannelIndex !== channelIndex) {
+    return false;
+  }
+  if (direction === "in") {
+    const hasDirectFlag = Object.hasOwn(message, "isDirectMessage");
+    const isDirectMessage = hasDirectFlag
+      ? Boolean(message.isDirectMessage)
+      : String(message.recipient || "") !== "^all";
+    return !isDirectMessage;
+  }
+  return String(message.recipient || "") === "^all";
+}
+
+function isIncomingDmMessage(message) {
+  if (!message || String(message.direction || "") !== "in") {
+    return false;
+  }
+  const hasDirectFlag = Object.hasOwn(message, "isDirectMessage");
+  const isDirectMessage = hasDirectFlag
+    ? Boolean(message.isDirectMessage)
+    : String(message.recipient || "") === "local-ai";
+  return isDirectMessage && Boolean(String(message.sender || "").trim());
 }
 
 // Parse optional "[250 sats] cashuA..." wrapper, returns { token, sats } or null
@@ -855,6 +1140,45 @@ function renderDmChat() {
   chatReplyText.scrollTop = chatReplyText.scrollHeight;
 }
 
+function renderChannelChat() {
+  const channel = getSelectedChatChannel();
+  if (!channel) {
+    renderChatEmpty("Create or select a channel first.");
+    return;
+  }
+  const thread = latestMessages.filter((message) => isChannelThreadMessage(message, channel.channelIndex));
+  if (!thread.length) {
+    renderChatEmpty(`No channel messages in ${formatChatChannelLabel(channel)} yet.`);
+    return;
+  }
+  chatReplyText.innerHTML = "";
+  thread.forEach((message) => {
+    const bubble = document.createElement("div");
+    bubble.className = `chat-bubble ${message.direction === "out" ? "user" : "node"}`;
+    if (message.id != null) bubble.dataset.msgId = message.id;
+
+    const meta = document.createElement("div");
+    meta.className = "chat-bubble-meta";
+    const author = message.direction === "out" ? "You" : (message.sender || "Node");
+    const stamp = formatChatTime(message.createdAt);
+    meta.textContent = stamp ? `${author} | ch${channel.channelIndex} | ${stamp}` : `${author} | ch${channel.channelIndex}`;
+
+    if (message.direction === "out") {
+      const ackIcon = document.createElement("span");
+      ackIcon.className = `chat-bubble-ack chat-bubble-ack--${message.ack || "pending"}`;
+      ackIcon.title = message.ack === "delivered" ? "Delivered" : message.ack === "failed" ? "Not delivered" : message.ack === "sent" ? "Sent to mesh" : "Sending...";
+      bubble.appendChild(ackIcon);
+    }
+
+    const body = document.createElement("div");
+    body.className = "chat-bubble-body";
+    body.textContent = message.text || "";
+    bubble.append(meta, body);
+    chatReplyText.appendChild(bubble);
+  });
+  chatReplyText.scrollTop = chatReplyText.scrollHeight;
+}
+
 async function refreshActiveDmChat() {
   const peerId = String(chatState.selectedPeer || "").trim();
   if (!peerId) {
@@ -876,31 +1200,52 @@ async function refreshActiveDmChat() {
 }
 
 function setChatMode(mode, { focusInput = false } = {}) {
-  chatState.mode = mode === CHAT_MODE_DM ? CHAT_MODE_DM : CHAT_MODE_AI;
+  chatState.mode = mode === CHAT_MODE_DM
+    ? CHAT_MODE_DM
+    : mode === CHAT_MODE_CHANS
+      ? CHAT_MODE_CHANS
+      : CHAT_MODE_AI;
   const isDm = chatState.mode === CHAT_MODE_DM;
+  const isChans = chatState.mode === CHAT_MODE_CHANS;
   if (chatForm) {
-    chatForm.classList.toggle("chat-form-dm", isDm);
+    chatForm.classList.toggle("chat-form-dm", isDm || isChans);
   }
 
   if (chatModeAiButton) {
-    chatModeAiButton.classList.toggle("is-active", !isDm);
-    chatModeAiButton.setAttribute("aria-selected", String(!isDm));
+    const isActive = chatState.mode === CHAT_MODE_AI;
+    chatModeAiButton.classList.toggle("is-active", isActive);
+    chatModeAiButton.setAttribute("aria-selected", String(isActive));
   }
   if (chatModeDmButton) {
     chatModeDmButton.classList.toggle("is-active", isDm);
     chatModeDmButton.setAttribute("aria-selected", String(isDm));
   }
+  if (chatModeChansButton) {
+    chatModeChansButton.classList.toggle("is-active", isChans);
+    chatModeChansButton.setAttribute("aria-selected", String(isChans));
+  }
   if (chatPeerRow) {
     chatPeerRow.classList.toggle("hidden", !isDm);
+  }
+  if (chatChannelRow) {
+    chatChannelRow.classList.toggle("hidden", !isChans);
   }
   if (chatPeerCashuButton) {
     chatPeerCashuButton.classList.toggle("hidden", !isDm);
   }
   if (chatSubtitle) {
-    chatSubtitle.textContent = isDm ? "Direct messages with mesh nodes" : "Offline AI";
+    chatSubtitle.textContent = isDm
+      ? "Direct messages with mesh nodes"
+      : isChans
+        ? "Group channels over mesh broadcast"
+        : "Offline AI";
   }
   if (chatText) {
-    chatText.placeholder = isDm ? CHAT_PLACEHOLDER_DM : CHAT_PLACEHOLDER_AI;
+    chatText.placeholder = isDm
+      ? CHAT_PLACEHOLDER_DM
+      : isChans
+        ? CHAT_PLACEHOLDER_CHANS
+        : CHAT_PLACEHOLDER_AI;
   }
 
   if (isDm && !chatState.selectedPeer && chatPeerSelect) {
@@ -909,12 +1254,19 @@ function setChatMode(mode, { focusInput = false } = {}) {
       setChatPeerSelection(firstPeer.value, { syncWallet: true, persist: true });
     }
   }
+  if (isChans) {
+    ensureSelectedChatChannel();
+    renderChatChannelList();
+  }
 
   if (isDm) {
     renderDmChat();
+  } else if (isChans) {
+    renderChannelChat();
   } else {
     renderLocalChatFromState();
   }
+  updateDmTabUnreadGlow();
 
   if (focusInput && chatText) {
     chatText.focus();
@@ -4170,8 +4522,11 @@ async function loadMessages() {
     logBox.innerHTML = "";
     latestMessages.forEach(appendLog);
     renderChatPeerList();
+    renderChatChannelList();
     if (chatState.mode === CHAT_MODE_DM) {
       renderDmChat();
+    } else if (chatState.mode === CHAT_MODE_CHANS) {
+      renderChannelChat();
     }
   } catch (error) {
     appendLog({ sender: "system", recipient: "-", text: error.message, transport: "system" });
@@ -4188,6 +4543,8 @@ async function loadNodes() {
     nodesList.innerHTML = `<div class="node-empty">${error.message}</div>`;
     if (chatState.mode === CHAT_MODE_DM) {
       renderDmChat();
+    } else if (chatState.mode === CHAT_MODE_CHANS) {
+      renderChannelChat();
     }
   }
 }
@@ -4233,6 +4590,25 @@ chatForm.addEventListener("submit", async (event) => {
     } catch (error) {
       appendLog({ sender: "system", recipient: destinationId, text: error.message, transport: "system" });
       renderDmChat();
+    }
+    return;
+  }
+  if (chatState.mode === CHAT_MODE_CHANS) {
+    const channel = getSelectedChatChannel();
+    if (!channel) {
+      renderChatEmpty("Select or create a channel.");
+      return;
+    }
+    try {
+      await fetchJson("/api/mesh/send", {
+        method: "POST",
+        body: JSON.stringify({ destinationId: "^all", channelIndex: channel.channelIndex, text }),
+      });
+      chatText.value = "";
+      await loadMessages();
+    } catch (error) {
+      appendLog({ sender: "system", recipient: `ch${channel.channelIndex}`, text: error.message, transport: "system" });
+      renderChannelChat();
     }
     return;
   }
@@ -4303,6 +4679,12 @@ if (chatModeDmButton) {
   });
 }
 
+if (chatModeChansButton) {
+  chatModeChansButton.addEventListener("click", () => {
+    setChatMode(CHAT_MODE_CHANS, { focusInput: true });
+  });
+}
+
 if (chatPeerSelect) {
   chatPeerSelect.addEventListener("change", () => {
     setChatPeerSelection(chatPeerSelect.value, { syncWallet: true, persist: true });
@@ -4312,11 +4694,42 @@ if (chatPeerSelect) {
   });
 }
 
+if (chatChannelSelect) {
+  chatChannelSelect.addEventListener("change", () => {
+    setChatChannelSelection(chatChannelSelect.value, { persist: true });
+    if (chatState.mode === CHAT_MODE_CHANS) {
+      renderChannelChat();
+    }
+  });
+}
+
 if (chatPeerTrigger) {
   chatPeerTrigger.addEventListener("click", (e) => {
     e.stopPropagation();
     const listEl = document.getElementById("chatPeerList");
     if (listEl) listEl.hidden = !listEl.hidden;
+    if (chatChannelList) chatChannelList.hidden = true;
+  });
+}
+
+if (chatChannelTrigger) {
+  chatChannelTrigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (chatChannelList) {
+      chatChannelList.hidden = !chatChannelList.hidden;
+    }
+    const peerList = document.getElementById("chatPeerList");
+    if (peerList) peerList.hidden = true;
+  });
+}
+
+if (chatChannelCreateButton) {
+  chatChannelCreateButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (chatChannelList) {
+      chatChannelList.hidden = true;
+    }
+    openChatChannelModal();
   });
 }
 
@@ -4347,9 +4760,16 @@ document.addEventListener("click", (e) => {
     const listEl = document.getElementById("chatPeerList");
     if (listEl) listEl.hidden = true;
   }
+  if (!chatChannelDropdown?.contains(e.target) && chatChannelList) {
+    chatChannelList.hidden = true;
+  }
 });
 
 renderChatPeerFilters();
+persistChatChannels(chatState.channels);
+populateChatChannelSelect();
+ensureSelectedChatChannel();
+renderChatChannelList();
 
 openModelManagerButton.addEventListener("click", openModelManager);
 openAiSettingsButton.addEventListener("click", openAiSettingsModal);
@@ -5175,6 +5595,39 @@ deviceMetaModal.addEventListener("click", (event) => {
     closeDeviceMetaModal();
   }
 });
+if (chatChannelModalClose) {
+  chatChannelModalClose.addEventListener("click", closeChatChannelModal);
+}
+if (chatChannelModal) {
+  chatChannelModal.addEventListener("click", (event) => {
+    if (event.target.hasAttribute("data-close-chat-channel-modal")) {
+      closeChatChannelModal();
+    }
+  });
+}
+if (chatChannelModalForm) {
+  chatChannelModalForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (chatChannelModalStatus) {
+      chatChannelModalStatus.textContent = "";
+    }
+    if (chatChannelModalSave) {
+      chatChannelModalSave.disabled = true;
+    }
+    try {
+      createCustomChatChannel(chatChannelModalName?.value || "", chatChannelModalIndex?.value || "");
+      closeChatChannelModal();
+    } catch (error) {
+      if (chatChannelModalStatus) {
+        chatChannelModalStatus.textContent = error.message || "Failed to create channel.";
+      }
+    } finally {
+      if (chatChannelModalSave) {
+        chatChannelModalSave.disabled = false;
+      }
+    }
+  });
+}
 deviceMetaSave.addEventListener("click", () => {
   deviceMetaStatus.textContent = "Saving...";
   deviceMetaSave.disabled = true;
@@ -5251,6 +5704,10 @@ nodeModal.addEventListener("click", (event) => {
 });
 document.addEventListener("keydown", (event) => {
   handleWalletModalFocusTrap(event);
+  if (event.key === "Escape" && chatChannelModal && !chatChannelModal.classList.contains("hidden")) {
+    closeChatChannelModal();
+    return;
+  }
   if (event.key === "Escape" && !walletModal.classList.contains("hidden")) {
     closeWalletModal();
     return;
@@ -5284,7 +5741,7 @@ function connectEvents() {
     latestMessages = latestMessages.slice(-300);
     appendLog(message);
     // Track unread incoming DM messages
-    if (message.direction === "in" && message.sender) {
+    if (isIncomingDmMessage(message)) {
       const isCurrentPeer = message.sender === chatState.selectedPeer && chatState.mode === CHAT_MODE_DM;
       if (!isCurrentPeer) {
         unreadPeers.add(message.sender);
@@ -5294,6 +5751,8 @@ function connectEvents() {
     }
     if (chatState.mode === CHAT_MODE_DM) {
       renderDmChat();
+    } else if (chatState.mode === CHAT_MODE_CHANS) {
+      renderChannelChat();
     }
   });
   source.addEventListener("status", () => {

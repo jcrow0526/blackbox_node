@@ -330,14 +330,17 @@ function getConfiguredMeshtasticPort() {
 }
 
 function getConfiguredTakChannel() {
-  const value = Number.parseInt(String(appSettings.takMeshtasticChannel ?? "0"), 10);
-  return Number.isInteger(value) && value >= 0 && value <= 7 ? value : 0;
+  return normalizeChannelIndex(appSettings.takMeshtasticChannel, 0);
 }
 
 function setConfiguredTakChannel(channel) {
-  const value = Number.parseInt(String(channel ?? "0"), 10);
-  appSettings.takMeshtasticChannel = Number.isInteger(value) && value >= 0 && value <= 7 ? value : 0;
+  appSettings.takMeshtasticChannel = normalizeChannelIndex(channel, 0);
   persistSettings();
+}
+
+function normalizeChannelIndex(value, fallback = 0) {
+  const parsed = Number.parseInt(String(value ?? fallback), 10);
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= 7 ? parsed : fallback;
 }
 
 function getConfiguredTakHopLimit() {
@@ -1348,9 +1351,27 @@ function updateMessageAck(messageId, ack) {
   broadcast("ack_update", { id: messageId, ack });
 }
 
-function clearMessages(scope, peerId = "") {
+function isChannelThreadMessage(message, channelIndex) {
+  const direction = String(message?.direction || "");
+  if (direction !== "in" && direction !== "out") {
+    return false;
+  }
+  if (normalizeChannelIndex(message?.channelIndex, -1) !== channelIndex) {
+    return false;
+  }
+  if (direction === "in") {
+    if (Object.hasOwn(message, "isDirectMessage")) {
+      return message.isDirectMessage === false;
+    }
+    return String(message?.recipient || "") === "^all";
+  }
+  return String(message?.recipient || "") === "^all";
+}
+
+function clearMessages(scope, peerId = "", channelIndex = null) {
   const normalizedScope = String(scope || "").trim();
   const normalizedPeerId = String(peerId || "").trim();
+  const normalizedChannelIndex = channelIndex == null ? null : normalizeChannelIndex(channelIndex, -1);
   const before = messages.length;
 
   if (normalizedScope === "local") {
@@ -1378,6 +1399,11 @@ function clearMessages(scope, peerId = "") {
       }
       return true;
     });
+  } else if (normalizedScope === "channel") {
+    if (normalizedChannelIndex == null || normalizedChannelIndex < 0) {
+      throw new Error("channelIndex is required");
+    }
+    messages = messages.filter((message) => !isChannelThreadMessage(message, normalizedChannelIndex));
   } else {
     throw new Error("invalid scope");
   }
@@ -3064,7 +3090,17 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function enqueueMeshBatch(destinationId, packets, sender = "local-ai", batchDelayMs = MESH_PACKET_BATCH_DELAY_MS) {
+function enqueueMeshBatch(
+  destinationId,
+  packets,
+  sender = "local-ai",
+  batchDelayMs = MESH_PACKET_BATCH_DELAY_MS,
+  options = {},
+) {
+  const isDirectMessage = Object.hasOwn(options, "isDirectMessage")
+    ? Boolean(options.isDirectMessage)
+    : destinationId !== "^all";
+  const channelIndex = normalizeChannelIndex(options.channelIndex, 0);
   const task = async () => {
     for (let index = 0; index < packets.length; index += 1) {
       const messageText = packets[index];
@@ -3079,6 +3115,7 @@ function enqueueMeshBatch(destinationId, packets, sender = "local-ai", batchDela
           retryOnAckTimeout: MESH_ACK_RETRY_COUNT,
           ackTimeoutRetryDelayMs: MESH_ACK_RETRY_DELAY_MS,
           clientMsgId,
+          channelIndex,
         },
       });
       const msg = addMessage({
@@ -3088,6 +3125,8 @@ function enqueueMeshBatch(destinationId, packets, sender = "local-ai", batchDela
         text: messageText,
         transport: "serial",
         ack: "pending",
+        channelIndex,
+        isDirectMessage,
       });
       pendingMsgByClientId.set(clientMsgId, msg.id);
       if (index < packets.length - 1) {
@@ -3101,12 +3140,12 @@ function enqueueMeshBatch(destinationId, packets, sender = "local-ai", batchDela
   return queued;
 }
 
-async function sendMeshReply(destinationId, text, sender = "local-ai") {
+async function sendMeshReply(destinationId, text, sender = "local-ai", options = {}) {
   const isCashu = isCashuMeshText(text);
   const packetMaxBytes = isCashu ? MESH_PACKET_MAX_BYTES_CASHU : MESH_PACKET_MAX_BYTES;
   const batchDelayMs = isCashu ? MESH_PACKET_BATCH_DELAY_MS_CASHU : MESH_PACKET_BATCH_DELAY_MS;
   const packets = buildMeshPackets(text, packetMaxBytes);
-  await enqueueMeshBatch(destinationId, packets, sender, batchDelayMs);
+  await enqueueMeshBatch(destinationId, packets, sender, batchDelayMs, options);
 }
 
 function sendBridge(command) {
@@ -3143,16 +3182,20 @@ function normalizePrompt(text) {
 async function handleInboundMesh(payload) {
   const repairedText = repairText(payload.text);
   updateKnownNode(payload.sender, repairedText);
+  const isDirectMessage = Boolean(payload.isDirectMessage);
+  const channelIndex = normalizeChannelIndex(payload.channelIndex, 0);
 
   addMessage({
     direction: "in",
     sender: payload.sender,
-    recipient: "local-ai",
+    recipient: isDirectMessage ? "local-ai" : "^all",
     text: repairedText,
     transport: payload.transport || "serial",
+    isDirectMessage,
+    channelIndex,
   });
 
-  if (!payload.isDirectMessage) {
+  if (!isDirectMessage) {
     return;
   }
 
@@ -3844,7 +3887,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url === "/api/messages/clear") {
       try {
         const body = await readJson(req);
-        const result = clearMessages(body.scope, body.peerId);
+        const result = clearMessages(body.scope, body.peerId, body.channelIndex);
         return sendJson(res, 200, result);
       } catch (error) {
         return sendJson(res, 400, { error: error.message });
@@ -4150,11 +4193,15 @@ const server = http.createServer(async (req, res) => {
       const body = await readJson(req);
       const destinationId = String(body.destinationId || "").trim();
       const text = String(body.text || "").trim();
-      if (!destinationId || !text) {
-        return sendJson(res, 400, { error: "destinationId and text are required" });
+      const hasChannelIndex = Object.hasOwn(body, "channelIndex");
+      const channelIndex = normalizeChannelIndex(body.channelIndex, 0);
+      const targetId = destinationId || (hasChannelIndex ? "^all" : "");
+      if (!targetId || !text) {
+        return sendJson(res, 400, { error: "destinationId or channelIndex, and text are required" });
       }
-      await sendMeshReply(destinationId, text, "local-ui");
-      return sendJson(res, 200, { ok: true });
+      const isDirectMessage = targetId !== "^all";
+      await sendMeshReply(targetId, text, "local-ui", { channelIndex, isDirectMessage });
+      return sendJson(res, 200, { ok: true, destinationId: targetId, channelIndex, isDirectMessage });
     }
 
     if (req.method === "GET" && req.url === "/api/cashu") {

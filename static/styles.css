@@ -232,9 +232,9 @@ body {
 
 .chat-mode-switch {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
-  min-width: 124px;
+  min-width: 188px;
 }
 
 .chat-clear-button {
@@ -3193,7 +3193,7 @@ textarea,
   }
 
   .chat-mode-switch {
-    min-width: 124px;
+    min-width: 188px;
   }
 
   .modal-grid {
@@ -3468,6 +3468,26 @@ textarea,
 }
 
 .device-meta-form button {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.chat-channel-modal-panel {
+  width: min(360px, calc(100vw - 32px));
+}
+
+.chat-channel-modal-form {
+  display: grid;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.chat-channel-modal-form input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.chat-channel-modal-form button {
   width: 100%;
   margin-top: 4px;
 }

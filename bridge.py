@@ -932,6 +932,7 @@ def main() -> int:
         text = decoded.get("text")
         telemetry = decoded.get("telemetry")
         portnum = str(decoded.get("portnum") or "")
+        channel_index = _resolve_channel_index(packet, decoded)
         sender = str(packet.get("fromId") or packet.get("from") or "unknown")
         recipient = str(packet.get("toId") or packet.get("to") or "local-ai")
         to_id = str(packet.get("toId") or "")
@@ -954,6 +955,7 @@ def main() -> int:
                 "hopStart": hop_start,
                 "hopLimit": hop_limit,
                 "rxSnr": rx_snr,
+                "channelIndex": channel_index,
                 "decoded": sanitize_for_json(decoded),
                 "packet": sanitize_for_json(packet),
             },
@@ -973,7 +975,6 @@ def main() -> int:
         # portNum 257 (ATAK_FORWARDER): zlib-compressed CoT XML for map items (waypoints, routes, polygons)
         if portnum in ("TAK_APP", "ATAK_PLUGIN"):
             raw_payload = _extract_payload_bytes(decoded.get("payload"))
-            channel_index = _resolve_channel_index(packet, decoded)
             dump_path = _dump_tak_plugin_payload(
                 sender,
                 raw_payload or b"",
@@ -999,14 +1000,13 @@ def main() -> int:
                     "sender": sender,
                     "recipient": recipient,
                     "portnum": portnum,
-                    "channelIndex": _resolve_channel_index(packet, decoded),
+                    "channelIndex": channel_index,
                     "hopLimit": hop_limit if isinstance(hop_limit, int) else None,
                     "payloadBytes": 0,
                     "decode": "no-payload",
                     "note": "ATAK_FORWARDER payload missing or unsupported format",
                 })
                 return
-            channel_index = _resolve_channel_index(packet, decoded)
             packet_type = get_packet_type(raw_payload)
             if is_fountain_packet(raw_payload) and packet_type in (TYPE_COMPLETE, TYPE_NEED_MORE):
                 emit("tak_debug", {
@@ -1086,6 +1086,7 @@ def main() -> int:
                 "text": repair_text(text),
                 "transport": "serial",
                 "isDirectMessage": is_direct_message,
+                "channelIndex": channel_index,
             },
         )
 
@@ -1266,6 +1267,7 @@ def main() -> int:
                 wait_for_ack = bool(payload.get("waitForAck"))
                 retry_count = max(0, int(payload.get("retryOnAckTimeout") or 0))
                 retry_delay_ms = max(0, int(payload.get("ackTimeoutRetryDelayMs") or 0))
+                channel_index = max(0, min(7, int(payload.get("channelIndex", 0) or 0)))
                 packet = None
                 acked = None
                 attempts = 0
@@ -1273,11 +1275,18 @@ def main() -> int:
 
                 for attempt in range(max_attempts):
                     attempts = attempt + 1
-                    packet = mesh_interface.sendText(
-                        text=text,
-                        destinationId=str(payload.get("destinationId", "")),
-                        wantAck=want_ack,
-                    )
+                    send_kwargs = {
+                        "text": text,
+                        "destinationId": str(payload.get("destinationId", "")),
+                        "wantAck": want_ack,
+                        "channelIndex": channel_index,
+                    }
+                    try:
+                        packet = mesh_interface.sendText(**send_kwargs)
+                    except TypeError:
+                        # Backward compatibility with older meshtastic python APIs.
+                        send_kwargs.pop("channelIndex", None)
+                        packet = mesh_interface.sendText(**send_kwargs)
                     if not want_ack or not wait_for_ack:
                         break
                     try:
@@ -1310,6 +1319,7 @@ def main() -> int:
                         "attempts": attempts,
                         "packetId": getattr(packet, "id", None),
                         "clientMsgId": payload.get("clientMsgId"),
+                        "channelIndex": channel_index,
                     },
                 )
             except Exception as exc:

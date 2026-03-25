@@ -104,6 +104,7 @@
                   <div class="chat-mode-switch" role="tablist" aria-label="Chat mode">
                     <button id="chatModeAiButton" type="button" class="chat-mode-btn is-active" aria-selected="true">AI</button>
                     <button id="chatModeDmButton" type="button" class="chat-mode-btn" aria-selected="false">Node DM</button>
+                    <button id="chatModeChansButton" type="button" class="chat-mode-btn" aria-selected="false">CHANS</button>
                   </div>
                 </div>
               </div>
@@ -133,6 +134,26 @@
                     </button>
                     <div id="chatPeerList" class="chat-peer-list" hidden>
                       <div class="chat-peer-empty">No nodes found</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div id="chatChannelRow" class="chat-peer-row hidden">
+              <div class="chat-peer-field">
+                <div class="chat-peer-header">
+                  <span>Mesh channel</span>
+                  <button id="chatChannelCreateButton" type="button" class="chat-peer-filter-btn">New</button>
+                </div>
+                <select id="chatChannelSelect" hidden></select>
+                <div class="chat-peer-controls">
+                  <div id="chatChannelDropdown" class="chat-peer-dropdown">
+                    <button id="chatChannelTrigger" type="button" class="chat-peer-trigger">
+                      <span id="chatChannelLabel">Primary Channel (ch0)</span>
+                      <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                    </button>
+                    <div id="chatChannelList" class="chat-peer-list" hidden>
+                      <div class="chat-peer-empty">No channels configured</div>
                     </div>
                   </div>
                 </div>
@@ -1052,6 +1073,30 @@
         <div id="deviceMetaStatus" class="device-status-text"></div>
         <button id="deviceMetaSave" type="button">Save to device</button>
       </div>
+    </section>
+  </div>
+  <div id="chatChannelModal" class="modal-shell hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-chat-channel-modal></div>
+    <section class="modal-panel panel chat-channel-modal-panel" role="dialog" aria-modal="true" aria-labelledby="chatChannelModalTitle">
+      <div class="panel-head modal-head">
+        <div>
+          <h2 id="chatChannelModalTitle">New Channel</h2>
+          <div class="chat-subtitle">Create a mesh group channel for CHANS mode</div>
+        </div>
+        <button id="chatChannelModalClose" type="button" class="modal-close" aria-label="Close"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/></svg></button>
+      </div>
+      <form id="chatChannelModalForm" class="chat-channel-modal-form">
+        <label class="device-meta-field" for="chatChannelModalName">
+          <span class="device-meta-label">Channel Name</span>
+          <input id="chatChannelModalName" type="text" maxlength="32" autocomplete="off" spellcheck="false" placeholder="Team Ops">
+        </label>
+        <label class="device-meta-field" for="chatChannelModalIndex">
+          <span class="device-meta-label">Meshtastic Channel Index <span class="device-meta-hint">(0-7)</span></span>
+          <input id="chatChannelModalIndex" type="number" min="0" max="7" step="1" placeholder="0">
+        </label>
+        <div id="chatChannelModalStatus" class="device-status-text" role="status" aria-live="polite"></div>
+        <button id="chatChannelModalSave" type="submit">Create Channel</button>
+      </form>
     </section>
   </div>
 
