@@ -8,7 +8,7 @@ const LLAMA_DIR = path.join(ROOT_DIR, "llama");
 const MODELS_DIR = path.join(ROOT_DIR, "models");
 const PYDEPS_DIR = path.join(ROOT_DIR, "pydeps");
 
-const REQUIRED_LLAMA_FILES = ["llama-server.exe", "llama.dll", "ggml.dll", "ggml-base.dll"];
+const WINDOWS_REQUIRED_LLAMA_FILES = ["llama-server.exe", "llama.dll", "ggml.dll", "ggml-base.dll"];
 const DEFAULT_MODEL = {
   filename: "Qwen2.5-0.5B-Instruct-Q3_K_M.gguf",
   url: "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q3_k_m.gguf?download=true",
@@ -81,26 +81,41 @@ function exists(filePath) {
   }
 }
 
+function getExpectedLlamaBinaryNames() {
+  if (process.platform === "win32") {
+    return ["llama-server.exe"];
+  }
+  return ["llama-server"];
+}
+
 function hasLlamaRuntime() {
   if (!exists(LLAMA_DIR)) {
     return false;
   }
 
-  if (!REQUIRED_LLAMA_FILES.every((filename) => exists(path.join(LLAMA_DIR, filename)))) {
+  const expectedBinaryNames = getExpectedLlamaBinaryNames();
+  if (!expectedBinaryNames.some((filename) => exists(path.join(LLAMA_DIR, filename)))) {
     return false;
   }
 
-  const entries = fs.readdirSync(LLAMA_DIR, { withFileTypes: true });
-  return entries.some((entry) => {
-    if (!entry.isFile()) {
+  if (process.platform === "win32") {
+    if (!WINDOWS_REQUIRED_LLAMA_FILES.every((filename) => exists(path.join(LLAMA_DIR, filename)))) {
       return false;
     }
-    const name = entry.name.toLowerCase();
-    if (!/^ggml-.*\.dll$/.test(name)) {
-      return false;
-    }
-    return name !== "ggml-base.dll" && name !== "ggml-rpc.dll";
-  });
+    const entries = fs.readdirSync(LLAMA_DIR, { withFileTypes: true });
+    return entries.some((entry) => {
+      if (!entry.isFile()) {
+        return false;
+      }
+      const name = entry.name.toLowerCase();
+      if (!/^ggml-.*\.dll$/.test(name)) {
+        return false;
+      }
+      return name !== "ggml-base.dll" && name !== "ggml-rpc.dll";
+    });
+  }
+
+  return true;
 }
 
 function hasAnyModel() {
@@ -195,7 +210,7 @@ function copyRuntimeFiles(extractedDir) {
   const files = listFilesRecursive(extractedDir);
   fs.mkdirSync(LLAMA_DIR, { recursive: true });
 
-  for (const filename of REQUIRED_LLAMA_FILES) {
+  for (const filename of WINDOWS_REQUIRED_LLAMA_FILES) {
     const source = files.find((filePath) => path.basename(filePath).toLowerCase() === filename.toLowerCase());
     if (!source) {
       throw new Error(`Missing ${filename} in extracted llama runtime`);
@@ -246,7 +261,8 @@ async function ensureLlamaRuntime() {
   }
 
   if (process.platform !== "win32") {
-    throw new Error("Automatic llama runtime install is currently implemented for Windows only");
+    log("automatic llama runtime install is only available on Windows; skipping runtime download");
+    return;
   }
 
   log("downloading llama.cpp runtime");
@@ -283,6 +299,7 @@ function findPythonLauncher() {
   const candidates = [
     ["C:\\Python311\\python.exe", ["--version"]],
     ["python", ["--version"]],
+    ["python3", ["--version"]],
     ["py", ["--version"]],
   ];
 
