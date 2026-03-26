@@ -111,7 +111,7 @@ The app starts in whatever mode it can. Radio, TAK, and mesh features stay inact
 
 ### Fast path
 
-```bat
+```bash
 npm install
 npm start
 ```
@@ -119,11 +119,13 @@ npm start
 During `npm install`, the project bootstraps the local AI runtime automatically:
 
 - installs JavaScript dependencies
-- downloads a Windows `llama.cpp` runtime into `./llama/` if missing
+- downloads a Windows `llama.cpp` runtime into `./llama/` if missing (Windows only)
 - downloads a starter GGUF model into `./models/` if missing
 - attempts to install the Meshtastic Python package into `./pydeps/` if Python is available
 
 That is enough for the web UI and local AI to start on a clean machine.
+
+On Linux/macOS, bootstrap will skip the `llama.cpp` binary download. Place a `llama-server` binary in `./llama/` (or set `BLACKBOX_LLAMA_SERVER_PATH`) and keep at least one `.gguf` model in `./models/`.
 
 ### 1. Prerequisites
 
@@ -134,14 +136,14 @@ Install these before anything else:
 
 Verify both are available:
 
-```bat
+```bash
 node --version
-python --version
+python3 --version
 ```
 
 ### 2. Clone and install Node dependencies
 
-```bat
+```bash
 git clone https://github.com/wadadawadada/blackbox_node.git
 cd blackbox_node
 npm install
@@ -189,8 +191,8 @@ Otherwise, create the `models/` folder and download at least one `.gguf` model f
 
 **Option B - download manually**
 
-```bat
-mkdir models
+```bash
+mkdir -p models
 ```
 
 Then place any `.gguf` file into `models/`. Recommended starter: `Qwen2.5-3B-Instruct-Q5_K_M.gguf` (~2.3 GB).
@@ -216,7 +218,7 @@ No device? The app still starts fine. Mesh, telemetry, and TAK features just sho
 
 ## Quick start
 
-```bat
+```bash
 npm install
 npm start
 ```
@@ -224,7 +226,7 @@ npm start
 On launch:
 
 - the web UI opens at `http://127.0.0.1:7860`
-- `llama-server.exe` starts from `./llama/` and loads the selected model
+- `llama-server` (or `llama-server.exe` on Windows) starts and loads the selected model
 - the Python Meshtastic bridge (`bridge.py`) connects to a detected serial device
 - the installer prepares `./llama/`, `./models/`, and tries to prepare `./pydeps/`
 
@@ -236,8 +238,8 @@ On launch:
 |---|---|
 | Node.js 18+ | Runtime for the web server |
 | Python 3.11+ | Required only for Meshtastic radio and TAK features |
-| Internet during `npm install` | Needed to download `llama.cpp`, a starter model, and optional Python deps |
-| `./llama/llama-server.exe` | Auto-downloaded on install if missing |
+| Internet during `npm install` | Needed to download a starter model and optional Python deps (Windows also auto-downloads `llama.cpp`) |
+| `./llama/llama-server` (or `.exe` on Windows) | Required to run local AI; auto-downloaded on Windows only |
 | At least one `.gguf` in `./models/` | Auto-downloaded on install if missing |
 | Meshtastic device on USB serial | Optional, but required for radio, telemetry, and TAK transport |
 
