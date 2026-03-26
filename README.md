@@ -111,7 +111,7 @@ The app starts in whatever mode it can. Radio, TAK, and mesh features stay inact
 
 ### Fast path
 
-```bat
+```bash
 npm install
 npm start
 ```
@@ -119,11 +119,13 @@ npm start
 During `npm install`, the project bootstraps the local AI runtime automatically:
 
 - installs JavaScript dependencies
-- downloads a Windows `llama.cpp` runtime into `./llama/` if missing
+- downloads a Windows `llama.cpp` runtime into `./llama/` if missing (Windows only)
 - downloads a starter GGUF model into `./models/` if missing
 - attempts to install the Meshtastic Python package into `./pydeps/` if Python is available
 
 That is enough for the web UI and local AI to start on a clean machine.
+
+On Linux/macOS, bootstrap will skip the `llama.cpp` binary download. Place a `llama-server` binary in `./llama/` (or set `BLACKBOX_LLAMA_SERVER_PATH`) and keep at least one `.gguf` model in `./models/`.
 
 ### 1. Prerequisites
 
@@ -134,14 +136,14 @@ Install these before anything else:
 
 Verify both are available:
 
-```bat
+```bash
 node --version
-python --version
+python3 --version
 ```
 
 ### 2. Clone and install Node dependencies
 
-```bat
+```bash
 git clone https://github.com/wadadawadada/blackbox_node.git
 cd blackbox_node
 npm install
@@ -189,8 +191,8 @@ Otherwise, create the `models/` folder and download at least one `.gguf` model f
 
 **Option B - download manually**
 
-```bat
-mkdir models
+```bash
+mkdir -p models
 ```
 
 Then place any `.gguf` file into `models/`. Recommended starter: `Qwen2.5-3B-Instruct-Q5_K_M.gguf` (~2.3 GB).
@@ -216,7 +218,7 @@ No device? The app still starts fine. Mesh, telemetry, and TAK features just sho
 
 ## Quick start
 
-```bat
+```bash
 npm install
 npm start
 ```

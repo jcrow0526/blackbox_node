@@ -23,7 +23,6 @@ const MUTINYNET_FAUCET_URL = "https://faucet.mutinynet.com";
 const SWAPS_FILE = path.join(DATA_DIR, "swaps.json");
 const PYDEPS_DIR = path.join(__dirname, "pydeps");
 const LLAMA_DIR = path.join(__dirname, "llama");
-const LLAMA_EXE = path.join(LLAMA_DIR, "llama-server.exe");
 const MODELS_DIR = path.join(__dirname, "models");
 const LLM_HOST = "127.0.0.1";
 const LLM_PORT = 8080;
@@ -251,6 +250,23 @@ let modelManagerOperation = {
   bytesTotal: 0,
 };
 let modelDownloadAbortController = null;
+
+function resolveLlamaExecutable() {
+  const customPath = String(process.env.BLACKBOX_LLAMA_SERVER_PATH || "").trim();
+  if (customPath) {
+    return customPath;
+  }
+  const candidates = process.platform === "win32"
+    ? ["llama-server.exe", "llama-server"]
+    : ["llama-server", "llama-server.exe"];
+  for (const candidate of candidates) {
+    const candidatePath = path.join(LLAMA_DIR, candidate);
+    if (fs.existsSync(candidatePath)) {
+      return candidatePath;
+    }
+  }
+  return path.join(LLAMA_DIR, candidates[0]);
+}
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(TAK_CAPTURE_DIR, { recursive: true });
@@ -2860,8 +2876,9 @@ function getModelPath(modelName = currentModelName) {
 }
 
 async function llamaHealth() {
-  if (!fs.existsSync(LLAMA_EXE)) {
-    return { ok: false, host: LLM_BASE_URL, model: currentModelName, error: "llama-server.exe not found" };
+  const llamaExecutable = resolveLlamaExecutable();
+  if (!fs.existsSync(llamaExecutable)) {
+    return { ok: false, host: LLM_BASE_URL, model: currentModelName, error: `llama runtime not found at ${llamaExecutable}` };
   }
   if (!fs.existsSync(getModelPath())) {
     return { ok: false, host: LLM_BASE_URL, model: currentModelName, error: "GGUF model not found" };
@@ -3241,8 +3258,9 @@ function stopLlamaServer() {
 
 function startLlamaServer() {
   resolveCurrentModelName();
-  if (!fs.existsSync(LLAMA_EXE)) {
-    updateLlmStatus({ connected: false, mode: "error", error: "llama-server.exe missing in ./llama", switching: false });
+  const llamaExecutable = resolveLlamaExecutable();
+  if (!fs.existsSync(llamaExecutable)) {
+    updateLlmStatus({ connected: false, mode: "error", error: `llama server missing at ${llamaExecutable}`, switching: false });
     return;
   }
   if (!fs.existsSync(getModelPath())) {
@@ -3260,7 +3278,7 @@ function startLlamaServer() {
   ];
 
   try {
-    llamaProcess = spawn(LLAMA_EXE, args, {
+    llamaProcess = spawn(llamaExecutable, args, {
       cwd: LLAMA_DIR,
       stdio: ["ignore", "pipe", "pipe"],
       shell: false,
