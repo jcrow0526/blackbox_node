@@ -2725,11 +2725,38 @@ function getModelManagerUiScript() {
 }
 
 function openBrowser() {
-  spawn("cmd", ["/c", "start", "", `http://${HOST}:${PORT}`], {
-    detached: true,
-    stdio: "ignore",
-    shell: false,
-  }).unref();
+  if (String(process.env.BLACKBOX_OPEN_BROWSER || "1").trim() === "0") {
+    return;
+  }
+
+  const targetUrl = `http://${HOST}:${PORT}`;
+  let command = null;
+  let args = [];
+
+  if (process.platform === "win32") {
+    command = "cmd";
+    args = ["/c", "start", "", targetUrl];
+  } else if (process.platform === "darwin") {
+    command = "open";
+    args = [targetUrl];
+  } else {
+    command = "xdg-open";
+    args = [targetUrl];
+  }
+
+  try {
+    const child = spawn(command, args, {
+      detached: true,
+      stdio: "ignore",
+      shell: false,
+    });
+    child.on("error", (error) => {
+      console.warn(`[startup] could not auto-open browser (${command}): ${error.message}`);
+    });
+    child.unref();
+  } catch (error) {
+    console.warn(`[startup] could not auto-open browser: ${error.message}`);
+  }
 }
 
 function listAvailableModels() {

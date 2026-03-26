@@ -226,7 +226,7 @@ npm start
 On launch:
 
 - the web UI opens at `http://127.0.0.1:7860`
-- `llama-server.exe` starts from `./llama/` and loads the selected model
+- `llama-server` (or `llama-server.exe` on Windows) starts and loads the selected model
 - the Python Meshtastic bridge (`bridge.py`) connects to a detected serial device
 - the installer prepares `./llama/`, `./models/`, and tries to prepare `./pydeps/`
 
@@ -238,8 +238,8 @@ On launch:
 |---|---|
 | Node.js 18+ | Runtime for the web server |
 | Python 3.11+ | Required only for Meshtastic radio and TAK features |
-| Internet during `npm install` | Needed to download `llama.cpp`, a starter model, and optional Python deps |
-| `./llama/llama-server.exe` | Auto-downloaded on install if missing |
+| Internet during `npm install` | Needed to download a starter model and optional Python deps (Windows also auto-downloads `llama.cpp`) |
+| `./llama/llama-server` (or `.exe` on Windows) | Required to run local AI; auto-downloaded on Windows only |
 | At least one `.gguf` in `./models/` | Auto-downloaded on install if missing |
 | Meshtastic device on USB serial | Optional, but required for radio, telemetry, and TAK transport |
 
